@@ -3,6 +3,6 @@
     "compilerOptions": {
       // ...
       "typeRoots": [ "./node_modules/@webgpu/types", "./node_modules/@types"],
-      "lib": ["ES2015", "DOM"]
+      "lib": ["ES2017", "DOM"]
     }
   }
