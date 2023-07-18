@@ -1,0 +1,9 @@
+<style>
+    body {
+        margin: 0;
+    }
+</style>
+<script>
+    new EventSource('/esbuild').addEventListener('change', () => location.reload())
+</script>
+<script src="index.js"></script>
