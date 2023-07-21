@@ -15,6 +15,7 @@ class Engine {
 
     pipeline: GPURenderPipeline;
     renderPassDesc: GPURenderPassDescriptor;
+    depthTexture: GPUTexture;
 
     camera: Camera;
     cameraController: CameraController;
@@ -56,6 +57,7 @@ class Engine {
         this.camera = new Camera(0.1, 1000, 50, width / height, [0, 0, 0.5]);
 
         this.pipeline = makeMeshPipeline(device, format);
+        this.initDepthTexture();
 
         this.renderPassDesc = {
             colorAttachments: [{
@@ -63,7 +65,13 @@ class Engine {
                 loadOp: 'clear' as const,
                 storeOp: 'store' as const,
                 clearValue: {r: 0, g: 0, b: 0, a: 1},
-            }]
+            }],
+            depthStencilAttachment: {
+                view: this.depthTexture.createView(),
+                depthLoadOp: 'clear',
+                depthStoreOp: 'store',
+                depthClearValue: 0
+            }
         };
 
         this.initCameraBuffer();
@@ -75,6 +83,15 @@ class Engine {
             this.uploadCameraState();
         });
         this.cameraController.start(this.canvas);
+    }
+
+    private initDepthTexture() {
+        const texture = this.device.createTexture({
+            size: [this.width, this.height],
+            format: 'depth32float',
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
+        });
+        this.depthTexture = texture;
     }
 
     private initCameraBuffer() {

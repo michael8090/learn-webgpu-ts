@@ -83,9 +83,11 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat) {
                 format,
             }]
         },
-        // depthStencil: {
-            
-        // }
+        depthStencil: {
+            format: 'depth32float',
+            depthWriteEnabled: true,
+            depthCompare: 'greater'
+        }
         // primitive: {
         //     topology: 'triangle-list'
         // }
