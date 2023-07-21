@@ -68,11 +68,20 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat) {
             module: shaderModule,
             entryPoint: 'mainVs',
             buffers: [{
+                // position
                 arrayStride: 12,
                 attributes: [{
                     format: 'float32x3' as const,
                     offset: 0,
                     shaderLocation: 0
+                }]
+            }, {
+                // normal
+                arrayStride: 12,
+                attributes: [{
+                    format: 'float32x3' as const,
+                    offset: 0,
+                    shaderLocation: 1
                 }]
             }]
         },

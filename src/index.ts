@@ -2,7 +2,7 @@ import { Camera, CameraController } from "./Camera";
 import {vec3, mat4, Vec3} from 'wgpu-matrix';
 import { makeMeshPipeline } from "./pipeline";
 import { Mesh } from "./Mesh";
-import { makePlane } from "./shapeBuilder";
+import { makeCube } from "./shapeBuilder";
 
 class Engine {
     canvas: HTMLCanvasElement;
@@ -23,7 +23,10 @@ class Engine {
     cameraTransformBuffer: GPUBuffer;
 
     meshes: Mesh[];
-    meshBuffers: GPUBuffer[] = [];
+    meshPositionBuffers: GPUBuffer[] = [];
+    meshIndexBuffers: GPUBuffer[] = [];
+    meshNormalBuffers: GPUBuffer[] = [];
+
     meshTransformBuffers: GPUBuffer[] = [];
     meshBindGroups: GPUBindGroup[] = [];
 
@@ -110,23 +113,39 @@ class Engine {
     }
 
     private initMeshes(n = 10) {
-        const {device, meshBuffers, meshTransformBuffers: meshTransforms, meshBindGroups, cameraProjectionBuffer, cameraTransformBuffer} = this;
+        const {device, meshPositionBuffers, meshIndexBuffers, meshNormalBuffers, meshTransformBuffers: meshTransforms, meshBindGroups, cameraProjectionBuffer, cameraTransformBuffer} = this;
 
         const r = () => Math.random() * 5;
         const meshes = Array(n).fill(0).map((i) => {
             const s = Math.random() * 5;
-            return makePlane(s, s, [r(), r(), r()]);
+            return makeCube(s, [r(), r(), r()]);
         });
 
         meshes.forEach(m => {
-            const {attribute, transform} = m;
-            const vertexBuffer = device.createBuffer({
-                size: attribute.byteLength,
+            const {vertex, index, normal, transform} = m;
+            const positionBuffer = device.createBuffer({
+                size: vertex.byteLength,
                 usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
             });
     
-            device.queue.writeBuffer(vertexBuffer, 0, attribute);
-            meshBuffers.push(vertexBuffer);
+            device.queue.writeBuffer(positionBuffer, 0, vertex);
+            meshPositionBuffers.push(positionBuffer);
+
+            const indexBuffer = device.createBuffer({
+                size: index.byteLength,
+                usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST
+            });
+    
+            device.queue.writeBuffer(indexBuffer, 0, index);
+            meshIndexBuffers.push(indexBuffer);
+
+            const normalBuffer = device.createBuffer({
+                size: normal.byteLength,
+                usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+            });
+    
+            device.queue.writeBuffer(normalBuffer, 0, normal);
+            meshNormalBuffers.push(normalBuffer);
 
 
             const meshTransformBuffer = device.createBuffer({
@@ -170,7 +189,7 @@ class Engine {
         // this.cameraState.theta += 0.01;
 
         this.meshes.forEach(m => {
-            // m.rotation[1] += 0.01;
+            m.rotation[1] += 0.01;
             m.update();
         });
 
@@ -182,7 +201,7 @@ class Engine {
     }
 
     draw() {
-        const {device, pipeline, context, meshes, meshBuffers, meshBindGroups, renderPassDesc} = this;
+        const {device, pipeline, context, meshes, meshPositionBuffers, meshNormalBuffers, meshBindGroups, renderPassDesc} = this;
         const encoder = device.createCommandEncoder();
 
         renderPassDesc.colorAttachments[0].view = context.getCurrentTexture().createView();
@@ -190,10 +209,12 @@ class Engine {
 
         pass.setPipeline(pipeline);
 
-        for (let i = 0, l = meshBuffers.length; i < l; i++) {
+        for (let i = 0, l = meshPositionBuffers.length; i < l; i++) {
             pass.setBindGroup(0, meshBindGroups[i]);
-            pass.setVertexBuffer(0, meshBuffers[i]);
-            pass.draw(meshes[i].attribute.length / 3);
+            pass.setVertexBuffer(0, meshPositionBuffers[i]);
+            pass.setVertexBuffer(1, meshNormalBuffers[i]);
+            pass.setIndexBuffer(this.meshIndexBuffers[i], 'uint32');
+            pass.draw(meshes[i].vertex.length / 3);
         }
 
         pass.end();
