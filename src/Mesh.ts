@@ -1,41 +1,21 @@
-import { Mat4, mat4 } from "wgpu-matrix";
+import { mat4, Vec3 } from "wgpu-matrix";
 
 export class Mesh {
-    vertexBufferGpu: GPUBuffer;
-    indexBufferGpu: GPUBuffer;
+    transform = mat4.identity() as Float32Array;
 
-    shaderModule: GPUShaderModule;
-
-    constructor(
-        public vertexBuffer: Float32Array,
-        public vertexBufferLayout: GPUVertexBufferLayout,
-        public indexBuffer: Float32Array,
-        public shaderCode: string,
-        public transform: Mat4 = mat4.identity()
-    ) {}
-
-    compileShader(device: GPUDevice) {
-        this.shaderModule = device.createShaderModule({
-            code: this.shaderCode,
-        });
+    constructor(public attribute: Float32Array, public position: Vec3, public rotation: Vec3, public scale: Vec3, ) {
+        this.update();
     }
 
-    upload(device: GPUDevice) {
-        if (!this.vertexBufferGpu) {
-            this.vertexBufferGpu = device.createBuffer({
-                size: this.vertexBuffer.byteLength,
-                usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-            });
-        }
+    update() {
+        mat4.scale(mat4.identity(), this.scale, this.transform);
 
-        if (!this.indexBufferGpu) {
-            this.vertexBufferGpu = device.createBuffer({
-                size: this.indexBuffer.byteLength,
-                usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
-            });
-        }
+        mat4.rotate(this.transform, [1, 0, 0], this.rotation[0], this.transform);
+        mat4.rotate(this.transform, [0, 1, 0], this.rotation[1], this.transform);
+        mat4.rotate(this.transform, [0, 0, 1], this.rotation[2], this.transform);
 
-        device.queue.writeBuffer(this.vertexBufferGpu, 0, this.vertexBuffer);
-        device.queue.writeBuffer(this.indexBufferGpu, 0, this.indexBuffer);
+        mat4.translate(this.transform, this.position, this.transform);
     }
 }
+
+

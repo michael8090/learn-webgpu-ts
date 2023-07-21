@@ -1,9 +1,8 @@
 import { Camera, CameraController } from "./Camera";
 import {vec3, mat4, Vec3} from 'wgpu-matrix';
-
-
-const PI = Math.PI;
-
+import { makeMeshPipeline } from "./pipeline";
+import { Mesh } from "./Mesh";
+import { makePlane } from "./shapeBuilder";
 
 class Engine {
     canvas: HTMLCanvasElement;
@@ -14,19 +13,18 @@ class Engine {
     context: GPUCanvasContext;
     format: GPUTextureFormat;
 
-    pipelineDesc: GPURenderPipelineDescriptor;
     pipeline: GPURenderPipeline;
-    vertexBufferLayout: GPUVertexBufferLayout;
-    vertexBuffer: GPUBuffer;
-    vertexData: Float32Array;
-    bindGroup: GPUBindGroup;
+    renderPassDesc: GPURenderPassDescriptor;
 
     camera: Camera;
     cameraController: CameraController;
     cameraProjectionBuffer: GPUBuffer;
     cameraTransformBuffer: GPUBuffer;
 
-
+    meshes: Mesh[];
+    meshBuffers: GPUBuffer[] = [];
+    meshTransformBuffers: GPUBuffer[] = [];
+    meshBindGroups: GPUBindGroup[] = [];
 
     async init() {
         const adapter = await navigator.gpu.requestAdapter();
@@ -57,11 +55,21 @@ class Engine {
 
         this.camera = new Camera(0.1, 1000, 50, width / height, [0, 0, 0.5]);
 
+        this.pipeline = makeMeshPipeline(device, format);
+
+        this.renderPassDesc = {
+            colorAttachments: [{
+                view: context.getCurrentTexture().createView(),
+                loadOp: 'clear' as const,
+                storeOp: 'store' as const,
+                clearValue: {r: 0, g: 0, b: 0, a: 1},
+            }]
+        };
+
         this.initCameraBuffer();
 
-        this.initVertexBuffer();
+        this.initMeshes();
 
-        this.initPipeline();
 
         this.cameraController = new CameraController(this.camera.transform, () => {
             this.uploadCameraState();
@@ -84,163 +92,92 @@ class Engine {
         device.queue.writeBuffer(this.cameraTransformBuffer, 0, this.camera.transform);
     }
 
-    private initVertexBuffer() {
-        const {device} = this;
+    private initMeshes(n = 10) {
+        const {device, meshBuffers, meshTransformBuffers: meshTransforms, meshBindGroups, cameraProjectionBuffer, cameraTransformBuffer} = this;
 
-        const vertexData = new Float32Array([
-            -1, -1, 0,
-            1, -1, 0,
-            -1, 1, 0,
-
-            1, -1, 0,
-            1, 1, 0,
-            -1, 1, 0,
-        ]);
-
-        const vertexBuffer = device.createBuffer({
-            size: vertexData.byteLength,
-            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+        const r = () => Math.random() * 5;
+        const meshes = Array(n).fill(0).map((i) => {
+            const s = Math.random() * 5;
+            return makePlane(s, s, [r(), r(), r()]);
         });
 
-        device.queue.writeBuffer(vertexBuffer, 0, vertexData);
-
-        const vertexBufferLayout: GPUVertexBufferLayout = {
-            arrayStride: 12,
-            attributes: [{
-                format: 'float32x3' as const,
-                offset: 0,
-                shaderLocation: 0
-            }]
-        };
-
-        this.vertexBufferLayout = vertexBufferLayout;
-        this.vertexBuffer = vertexBuffer;
-        this.vertexData = vertexData;
-    }
-
-    private getShaderModule() {
-        const {device} = this;
-        const shaderString = /* wgsl */`
-        @group(0) @binding(0) var<uniform> projectMatrix: mat4x4<f32>;
-        @group(0) @binding(1) var<uniform> viewMatrix: mat4x4<f32>;
-
-        struct VertexOutput {
-            @builtin(position) position: vec4f,
-            @location(0) positionNorm: vec4f,
-        }
-
-        @vertex
-        fn mainVs(@location(0) pos: vec3f) -> VertexOutput {
-            var vsOut: VertexOutput;
-            let p = vec4f(pos, 1.0);
-            vsOut.position = projectMatrix * viewMatrix * p;
-            vsOut.positionNorm = p;
-            return vsOut;
-        }
+        meshes.forEach(m => {
+            const {attribute, transform} = m;
+            const vertexBuffer = device.createBuffer({
+                size: attribute.byteLength,
+                usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+            });
+    
+            device.queue.writeBuffer(vertexBuffer, 0, attribute);
+            meshBuffers.push(vertexBuffer);
 
 
-        @fragment
-        fn mainFs(vsOut: VertexOutput) -> @location(0) vec4f {
-            let p = vsOut.positionNorm;
-            return vec4f((p.xy + 1.0) * 0.5, 1.0, 1.0);
-        }
-        
-        `;
+            const meshTransformBuffer = device.createBuffer({
+                size: transform.byteLength,
+                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+            });
+            device.queue.writeBuffer(meshTransformBuffer, 0, transform);
+            meshTransforms.push(meshTransformBuffer);
 
-        return device.createShaderModule({code: shaderString});
-    }
-
-    private initPipeline() {
-        const {device, format, vertexBufferLayout, camera, cameraProjectionBuffer, cameraTransformBuffer} = this;
-
-        const bindGroupLayout = device.createBindGroupLayout({
-            entries: [{
-                binding: 0,
-                visibility: GPUShaderStage.VERTEX,
-                buffer: {
-                    type: 'uniform' as const,
-                    minBindingSize: camera.projection.byteLength
-                }
-            }, {
-                binding: 1,
-                visibility: GPUShaderStage.VERTEX,
-                buffer: {
-                    type: 'uniform' as const,
-                    minBindingSize: camera.transform.byteLength
-                }
-            }]
-        })
-
-        const bindGroup = device.createBindGroup({
-            layout: bindGroupLayout,
-            entries: [{
-                binding: 0,
-                resource: {buffer: cameraProjectionBuffer}
-            }, {
-                binding: 1,
-                resource: {buffer: cameraTransformBuffer}
-            }]
+            meshBindGroups.push(device.createBindGroup({
+                layout: this.pipeline.getBindGroupLayout(0),
+                entries: [{
+                    binding: 0,
+                    resource: {buffer: cameraProjectionBuffer},
+                },{
+                    binding: 1,
+                    resource: {buffer: cameraTransformBuffer},
+                },{
+                    binding: 2,
+                    resource: {buffer: meshTransformBuffer},
+                },]
+            }))
         });
-        this.bindGroup = bindGroup;
 
-        const shaderModule = this.getShaderModule();
+        this.meshes = meshes;
+    }
 
-        const pipelineDesc: GPURenderPipelineDescriptor = {
-            layout: device.createPipelineLayout({bindGroupLayouts: [bindGroupLayout]}),
-            vertex: {
-                module: shaderModule,
-                entryPoint: 'mainVs',
-                buffers: [vertexBufferLayout]
-            },
-            fragment: {
-                module: shaderModule,
-                entryPoint: 'mainFs',
-                targets: [{
-                    format
-                }]
-            }
-        }
-
-        const pipeline = device.createRenderPipeline(pipelineDesc);
-
-        this.pipelineDesc = pipelineDesc;
-        this.pipeline = pipeline;
+    private uploadMeshUniforms() {
+        const {meshes, meshTransformBuffers, device} = this;
+        meshes.forEach((m, i) => {
+            device.queue.writeBuffer(meshTransformBuffers[i], 0, m.transform);
+        });
     }
 
     private uploadCameraState() {
-        // const {camera: {transform}, cameraState: {lookAt, r, theta, phi}} = this;
-        // const rxz = r * Math.sin(theta);
-        // const position = [ rxz * Math.cos(phi),r * Math.cos(theta), rxz * Math.sin(phi) ];
-        // mat4.lookAt(position, lookAt, [0, 1, 0], transform);
-
         this.device.queue.writeBuffer(this.cameraTransformBuffer, 0, this.camera.transform);
     }
 
     start = () => {
         // this.cameraState.phi += 0.01;
         // this.cameraState.theta += 0.01;
+
+        this.meshes.forEach(m => {
+            m.rotation[1] += 0.01;
+            m.update();
+        });
+
+        this.uploadMeshUniforms();
+        
         this.uploadCameraState();
         this.draw();
         requestAnimationFrame(this.start);
     }
 
     draw() {
-        const {device, vertexBuffer, vertexData, pipeline, context, bindGroup} = this;
+        const {device, pipeline, context, meshes, meshBuffers, meshBindGroups, renderPassDesc} = this;
         const encoder = device.createCommandEncoder();
 
-        const pass = encoder.beginRenderPass({
-            colorAttachments: [{
-                view: context.getCurrentTexture().createView(),
-                loadOp: 'clear' as const,
-                storeOp: 'store' as const,
-                clearValue: {r: 0, g: 0, b: 0, a: 1}
-            }]
-        });
+        renderPassDesc.colorAttachments[0].view = context.getCurrentTexture().createView();
+        const pass = encoder.beginRenderPass(renderPassDesc);
 
-        pass.setBindGroup(0, bindGroup);
         pass.setPipeline(pipeline);
-        pass.setVertexBuffer(0, vertexBuffer);
-        pass.draw(vertexData.length / 3);
+
+        for (let i = 0, l = meshBuffers.length; i < l; i++) {
+            pass.setBindGroup(0, meshBindGroups[i]);
+            pass.setVertexBuffer(0, meshBuffers[i]);
+            pass.draw(meshes[i].attribute.length / 3);
+        }
 
         pass.end();
 

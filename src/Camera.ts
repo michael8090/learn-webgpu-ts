@@ -46,7 +46,7 @@ export class CameraController {
 
     constructor(public transform: Mat4, public onChange: () => void, public speed = 1.0, public cameraState: CameraState = {
         theta: 0.5 * Math.PI,
-        phi: 0,
+        phi: -0.5 * Math.PI,
         r: 100,
         lookAt: vec3.zero()
     }){
@@ -57,7 +57,7 @@ export class CameraController {
     update() {
         const {transform, cameraState: {lookAt, r, theta, phi}} = this;
         const rxz = r * Math.sin(theta);
-        const position = [ rxz * Math.cos(phi),r * Math.cos(theta), rxz * Math.sin(phi) ];
+        const position = [ rxz * Math.cos(phi), r * Math.cos(theta), rxz * Math.sin(phi) ];
         mat4.lookAt(position, lookAt, [0, 1, 0], transform);
         this.onChange();
     }
