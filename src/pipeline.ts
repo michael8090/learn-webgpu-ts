@@ -86,7 +86,7 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat) {
         depthStencil: {
             format: 'depth32float',
             depthWriteEnabled: true,
-            depthCompare: 'greater'
+            depthCompare: 'less'
         }
         // primitive: {
         //     topology: 'triangle-list'

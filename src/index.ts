@@ -70,7 +70,7 @@ class Engine {
                 view: this.depthTexture.createView(),
                 depthLoadOp: 'clear',
                 depthStoreOp: 'store',
-                depthClearValue: 0
+                depthClearValue: 1
             }
         };
 
@@ -170,7 +170,7 @@ class Engine {
         // this.cameraState.theta += 0.01;
 
         this.meshes.forEach(m => {
-            m.rotation[1] += 0.01;
+            // m.rotation[1] += 0.01;
             m.update();
         });
 
