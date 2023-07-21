@@ -12,23 +12,23 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat) {
 
             struct VertexOutput {
                 @builtin(position) position: vec4f,
-                @location(0) positionNorm: vec4f,
+                @location(0) normal: vec3f,
             }
 
             @vertex
-            fn mainVs(@location(0) pos: vec3f) -> VertexOutput {
+            fn mainVs(@location(0) pos: vec3f, @location(1) normal: vec3f) -> VertexOutput {
                 var vsOut: VertexOutput;
                 let p = vec4f(pos, 1.0);
                 vsOut.position = projectMatrix * viewMatrix * modelMatrix * p;
-                vsOut.positionNorm = p;
+                vsOut.normal = normal;
                 return vsOut;
             }
 
 
             @fragment
             fn mainFs(vsOut: VertexOutput) -> @location(0) vec4f {
-                let p = vsOut.positionNorm;
-                return vec4f((p.xy + 1.0) * 0.5, 1.0, 1.0);
+                let p = vsOut.normal;
+                return vec4f((p.xyz + 1.0) * 0.5, 1.0);
             }
         `
     });

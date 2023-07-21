@@ -73,9 +73,9 @@ const computeNormal = (function() {
       vec3.set(vertexes[ai1], vertexes[ai1 + 1], vertexes[ai1 + 2], p1);
       vec3.set(vertexes[ai2], vertexes[ai2 + 1], vertexes[ai2 + 2], p2);
 
-      vec3.sub(v0, p1, p0);
-      vec3.sub(v1, p2, p0);
-      vec3.cross(n, v0, v1);
+      vec3.sub(p1, p0, v0);
+      vec3.sub(p2, p0, v1);
+      vec3.cross(v0, v1, n);
       vec3.normalize(n, n);
       const idxs = [i0, i1, i2];
       for (let i = 0, l = idxs.length; i < l; i++) {
@@ -85,7 +85,7 @@ const computeNormal = (function() {
           vertexNormalMap[idx] = vec3.clone(n);
         } else {
           // it should never be here
-          vec3.add(normal, normal, n);
+          vec3.add(normal, n, normal);
         }
       }
     }
