@@ -83,6 +83,9 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat) {
                 format,
             }]
         },
+        // depthStencil: {
+            
+        // }
         // primitive: {
         //     topology: 'triangle-list'
         // }
