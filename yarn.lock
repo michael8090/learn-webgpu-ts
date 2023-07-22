@@ -150,6 +150,11 @@ esbuild@^0.18.11:
     "@esbuild/win32-ia32" "0.18.15"
     "@esbuild/win32-x64" "0.18.15"
 
+gltf-loader-ts@^0.3.1:
+  version "0.3.1"
+  resolved "https://registry.npmmirror.com/gltf-loader-ts/-/gltf-loader-ts-0.3.1.tgz#917395bfc77dc98df148c57a2585170241be6318"
+  integrity sha512-GypLFqIDAEtl211fPyGA596Wz75R9eHEAMl+RQfQ8XQZb6Wks/1Aas6YuF/e/Xw57rULkefcBW/hsqLISkBBww==
+
 wgpu-matrix@^2.4.2:
   version "2.4.2"
   resolved "https://registry.npmmirror.com/wgpu-matrix/-/wgpu-matrix-2.4.2.tgz#579993b86345db8c76e8593cfdb5acd13d33d461"

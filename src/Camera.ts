@@ -44,11 +44,11 @@ export class CameraController {
     private isMouseDown = false;
     private lastMousePosition: MousePosition;
 
-    constructor(public transform: Mat4, public onChange: () => void, public speed = 1.0, public cameraState: CameraState = {
+    constructor(public transform: Mat4, public onChange: () => void, public speed = 0.01, public cameraState: CameraState = {
         theta: 0.5 * Math.PI,
         phi: -0.5 * Math.PI,
-        r: 100,
-        lookAt: vec3.zero()
+        r: 1000,
+        lookAt: vec3.create(2, 2, 2)
     }){
         this.update();
     }
@@ -58,7 +58,7 @@ export class CameraController {
         const {transform, cameraState: {lookAt, r, theta, phi}} = this;
         const rxz = r * Math.sin(theta);
         const position = [ rxz * Math.cos(phi), r * Math.cos(theta), rxz * Math.sin(phi) ];
-        mat4.lookAt(position, lookAt, [0, 1, 0], transform);
+        mat4.lookAt(vec3.add(position, lookAt), lookAt, [0, 1, 0], transform);
         this.onChange();
     }
 
@@ -76,24 +76,53 @@ export class CameraController {
             const dx = e.pageX - mouseDownPosition.x;
             const dy = e.pageY - mouseDownPosition.y;
 
-            const dPhi = dx / cameraState.r;
-            const dTheta = dy / cameraState.r;
+            if (e.buttons === 1) {
+                // left to rotate
+                const dPhi = dx;
+                const dTheta = dy;
+    
+                cameraState.theta = Math.min(Math.max(cameraState.theta + dTheta * speed, 0.0001), Math.PI - 0.0001);
+                
+                cameraState.phi += dPhi * speed;
+            } else if (e.buttons === 2) {
+                // right to move
+                // vec3.add(cameraState.lookAt, []
+            }
 
-            this.cameraState.theta += dTheta * speed;
-            this.cameraState.phi += dPhi * speed;
+
 
             this.update();
 
             this.lastMousePosition = {x: pageX, y: pageY};
         }
     }
+
     onMouseUp = (e: MouseEvent) => {
         this.isMouseDown = false;
+    }
+
+    onMouseWheel = (e: WheelEvent) => {
+        let r = this.cameraState.r;
+        const zoomSpeed = 1.05;
+        if (e.deltaY > 0) {
+          r *= zoomSpeed;
+        } else {
+          r /= zoomSpeed;
+        }
+        this.cameraState.r = r;
+        this.update();
+    }
+
+    onContextMenu = (e: MouseEvent) => {
+        e.preventDefault();
     }
 
     start(listenNode: HTMLElement) {
         listenNode.addEventListener('mousedown', this.onMouseDown);
         listenNode.addEventListener('mousemove', this.onMouseMove);
         listenNode.addEventListener('mouseup', this.onMouseUp);
+        listenNode.addEventListener('mousewheel', this.onMouseWheel);
+        listenNode.addEventListener('contextmenu', this.onContextMenu);
+
     }
 }

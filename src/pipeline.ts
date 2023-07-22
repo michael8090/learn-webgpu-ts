@@ -6,11 +6,17 @@ const mat4Size = uselessMat4.byteLength;
 export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat) {
     const shaderModule = device.createShaderModule({
         code: /* wgsl */`
+            struct Light {
+                position: vec4f,
+                color: vec3f,
+            }
+
             @group(0) @binding(0) var<uniform> projectMatrix: mat4x4<f32>;
             @group(0) @binding(1) var<uniform> viewMatrix: mat4x4<f32>;
             @group(0) @binding(2) var<uniform> modelMatrix: mat4x4<f32>;
             @group(0) @binding(3) var ourTexture: texture_2d<f32>;
             @group(0) @binding(4) var ourSampler: sampler;
+            @group(0) @binding(5) var<uniform> light: Light;
 
 
             struct VertexOutput {
@@ -32,9 +38,35 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat) {
 
             @fragment
             fn mainFs(vsOut: VertexOutput) -> @location(0) vec4f {
-                let p = vsOut.uv;
-                return textureSample(ourTexture, ourSampler, p);
+                let diffuseTextureColor = textureSample(ourTexture, ourSampler, vsOut.uv).xyz;
                 // return vec4f((p.xy + 1.0) * 0.5, 1.0, 1.0);
+                let spotLightPosition = (light.position).xyz;
+                let lightColor = light.color;
+                let position = vsOut.position.xyz;
+
+                let lightD = position - spotLightPosition;
+                let lightDirection = normalize(lightD);
+                // let lightDistance = length(lightD);
+                // let sl = lightDistance * lightDistance;
+                let normal = normalize(vsOut.normal);
+                
+                // ambient
+                let ambientColor = 0.1 * diffuseTextureColor;
+              
+                // diffuse
+                let diffuse = max(dot(-lightDirection, normal), 0.0);
+                let diffuseColor = lightColor * diffuse;
+              
+                // // specular
+                // let specularStrength = 0.5;
+                // let reflectDirection = normalize(reflect(lightDirection, normal));
+                // let cameraPosition = vec
+                // let eyeDirection = normalize(u_eye_pos - position);
+                // let specular = pow(max(dot(reflectDirection, eyeDirection), 0.0), 256.0); 
+                // let specularColor = lightColor * specularStrength * specular;
+                return vec4f(ambientColor + diffuseColor, 1.0);
+
+                // return vec4f(position * 0.5 + 0.5, 1.0);
             }
         `
     });
@@ -79,6 +111,14 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat) {
             sampler: {
                 type: 'filtering' as const
             },
+        }, {
+            // light color & position, 12 + 12, but as there is padding, so we need 16 + 16
+            binding: 5,
+            visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+            buffer: {
+                type: 'uniform' as const,
+                minBindingSize: 32
+            }
         }]
     })
 

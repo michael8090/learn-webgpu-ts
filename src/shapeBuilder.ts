@@ -105,6 +105,7 @@ const computeNormal = (function() {
   };
 })();
 
+// there is no shared vertex in the generated data
 function getBox(size: number) {
   const indicesForSharedVertexes = new Uint16Array([
     4,
@@ -190,15 +191,45 @@ function getBox(size: number) {
     size
   ]);
 
-  const sharedUvs = new Float32Array([
-    // back
-    1, 0,
-    0, 0,
+  const uvs = new Float32Array([
     0, 1,
-    1, 1,
-
-    // front
     0, 0,
+    1, 0,
+    1, 0,
+    1, 1,
+    0, 1,
+
+    0, 1,
+    0, 0,
+    1, 0,
+    1, 0,
+    1, 1,
+    0, 1,
+
+    0, 1,
+    0, 0,
+    1, 0,
+    1, 0,
+    1, 1,
+    0, 1,
+
+    0, 1,
+    0, 0,
+    1, 0,
+    1, 0,
+    1, 1,
+    0, 1,
+
+    0, 1,
+    0, 0,
+    1, 0,
+    1, 0,
+    1, 1,
+    0, 1,
+
+    0, 1,
+    0, 0,
+    1, 0,
     1, 0,
     1, 1,
     0, 1,
@@ -219,17 +250,17 @@ function getBox(size: number) {
     )
   );
 
-  const uvs = new Float32Array(
-    indicesForSharedVertexes.reduce((acc, idx) => {
-      const ai = idx * 3;
-      acc.push(
-        sharedUvs[ai],
-        sharedUvs[ai + 1],
-        sharedUvs[ai + 2],
-      )
-      return acc
-    }, [] as number[])
-  );
+  // const uvs = new Float32Array(
+  //   indicesForSharedVertexes.reduce((acc, idx) => {
+  //     const ai = idx * 3;
+  //     acc.push(
+  //       sharedUvs[ai],
+  //       sharedUvs[ai + 1],
+  //       sharedUvs[ai + 2],
+  //     )
+  //     return acc
+  //   }, [] as number[])
+  // );
 
   const idxes: number[] = [];
   for (let i = 0, l = indicesForSharedVertexes.length; i < l; i++) {

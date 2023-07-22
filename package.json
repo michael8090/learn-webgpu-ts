@@ -5,6 +5,7 @@
         "serve": "mkdir -p build; cp src/index.html build; node ./build.js;"
     },
     "dependencies": {
+        "gltf-loader-ts": "^0.3.1",
         "wgpu-matrix": "^2.4.2"
     },
     "devDependencies": {

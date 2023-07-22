@@ -1,9 +1,10 @@
 import { Camera, CameraController } from "./Camera";
-import {vec3, mat4, Vec3} from 'wgpu-matrix';
+import {vec3, vec4, mat4, Vec3} from 'wgpu-matrix';
 import { makeMeshPipeline } from "./pipeline";
 import { Mesh } from "./Mesh";
 import { makeCube } from "./shapeBuilder";
 import { ImageLoader } from "./ImageLoader";
+import { SpotLight } from "./SpotLight";
 
 class Engine {
     canvas: HTMLCanvasElement;
@@ -35,6 +36,10 @@ class Engine {
     imageLoader = new ImageLoader();
     uploadedTextures = new WeakMap<ImageData, {texture: GPUTexture, sampler: GPUSampler}>();
 
+    light = new SpotLight([0, 0, 0], [1, 1, 1]);
+    lightBuffer: GPUBuffer;
+    lightIndicator: Mesh;
+
     async init() {
         const adapter = await navigator.gpu.requestAdapter();
         const device = await adapter.requestDevice();
@@ -62,7 +67,7 @@ class Engine {
         this.context = context;
         this.format = format;
 
-        this.camera = new Camera(0.1, 1000, 50, width / height, [0, 0, 0.5]);
+        this.camera = new Camera(0.1, 10000, 50, width / height, [0, 0, 0.5]);
 
         this.pipeline = makeMeshPipeline(device, format);
         this.initDepthTexture();
@@ -84,6 +89,8 @@ class Engine {
 
         this.initCameraBuffer();
 
+        this.initLightBuffer();
+
         await this.initMeshes();
 
 
@@ -91,6 +98,16 @@ class Engine {
             this.uploadCameraState();
         });
         this.cameraController.start(this.canvas);
+    }
+
+    private getProjectedLightBuffer() {
+        const l = this.light.position;
+        let p = vec4.fromValues(l[0], l[1], l[2], 1);
+        vec4.transformMat4(p, this.camera.transform, p);
+        vec4.transformMat4(p, this.camera.projection, p);
+        let ret = [];
+        ret = ret.concat(Array.from(p)).concat(this.light.color).concat([0]);
+        return new Float32Array(ret);
     }
 
     private initDepthTexture() {
@@ -117,14 +134,26 @@ class Engine {
         device.queue.writeBuffer(this.cameraTransformBuffer, 0, this.camera.transform);
     }
 
-    private async initMeshes(n = 10) {
-        const {device, meshPositionBuffers, meshIndexBuffers, meshNormalBuffers, meshUvBuffers, meshTransformBuffers: meshTransforms, meshBindGroups, cameraProjectionBuffer, cameraTransformBuffer} = this;
+    private initLightBuffer() {
+        const {device} = this;
+        this.lightBuffer = device.createBuffer({
+            size: 32,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+        });
+        device.queue.writeBuffer(this.lightBuffer, 0, this.getProjectedLightBuffer());
+    }
 
-        const r = () => Math.random() * 5;
+    private async initMeshes(n = 100) {
+        const {device, meshPositionBuffers, meshIndexBuffers, meshNormalBuffers, meshUvBuffers, meshTransformBuffers: meshTransforms, meshBindGroups, cameraProjectionBuffer, cameraTransformBuffer, lightBuffer} = this;
+
+        const r = () => (Math.random() - 0.5) * n;
         const meshes = Array(n).fill(0).map((i) => {
-            const s = Math.random() * 5;
+            const s = Math.random() * n * 0.15;
             return makeCube(s, [r(), r(), r()]);
         });
+        const lightMesh = makeCube(10, this.light.position);
+        meshes.push(lightMesh);
+        this.lightIndicator = lightMesh;
 
         await Promise.all(meshes.map(async m => {
             const {index, attributes: {position: vertex, normal, uv}, uniforms: {textureUrl, transform}} = m;
@@ -200,6 +229,9 @@ class Engine {
                 }, {
                     binding: 4,
                     resource: sampler
+                }, {
+                    binding: 5,
+                    resource: {buffer: lightBuffer},
                 }]
             }))
         }));
@@ -218,6 +250,8 @@ class Engine {
         this.device.queue.writeBuffer(this.cameraTransformBuffer, 0, this.camera.transform);
     }
 
+    private t = 0;
+
     start = () => {
         // this.cameraState.phi += 0.01;
         // this.cameraState.theta += 0.01;
@@ -227,6 +261,14 @@ class Engine {
         //     m.update();
         // });
 
+        this.t++;
+        const phi = this.t * 0.05;
+        const r = 25;
+        this.light.position = [r * Math.cos(phi), 0, r * Math.sin(phi)];
+        this.device.queue.writeBuffer(this.lightBuffer, 0, this.getProjectedLightBuffer());
+
+        this.lightIndicator.uniforms.position = this.light.position;
+        this.lightIndicator.updateTransform();
         this.uploadMeshUniforms();
         
         this.uploadCameraState();
