@@ -163,7 +163,7 @@ class Engine {
         });
         const lightMesh = makeCube(2, this.light.position);
         lightMesh.uniforms.textureUrl = '/assets/light.jpg';
-        lightMesh.uniforms.emissiveColor = new Float32Array([.8, .8, .8]);
+        lightMesh.uniforms.emissiveColor = new Float32Array(this.light.color);
         meshes.push(lightMesh);
         this.lightIndicator = lightMesh;
 
