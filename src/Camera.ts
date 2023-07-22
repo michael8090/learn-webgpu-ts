@@ -1,5 +1,10 @@
 import { mat4, Mat4, Vec3, vec3} from "wgpu-matrix";
 
+const depthRangeRemapMatrix = mat4.identity();
+depthRangeRemapMatrix[10] = -1;
+depthRangeRemapMatrix[14] = 1;
+
+
 export class Camera {
     projection = mat4.create() as Float32Array;
     transform  = mat4.create() as Float32Array;
@@ -18,6 +23,8 @@ export class Camera {
 
     updateProjection() {
         mat4.perspective(this.fov, this.aspect, this.near, this.far, this.projection);
+        // reversed z
+        mat4.mul(depthRangeRemapMatrix, this.projection, this.projection);
         // mat4.identity(this.projection);
     }
 

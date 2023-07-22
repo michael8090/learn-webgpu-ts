@@ -61,13 +61,15 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat) {
                 // let lightDistance = length(lightD);
                 // let sl = lightDistance * lightDistance;
                 let normal = normalize(vsOut.normal);
+
+                let moderatedColor = lightColor * diffuseTextureColor;
                 
                 // ambient
                 let ambientColor = 0.1 * diffuseTextureColor;
               
                 // diffuse
                 let diffuse = max(dot(-lightDirection, normal), 0.0);
-                let diffuseColor = lightColor * diffuse;
+                let diffuseColor = moderatedColor * diffuse;
               
                 // specular
                 let specularStrength = 1.0;
@@ -78,9 +80,11 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat) {
                     specular = pow(max(dot(reflectDirection, cameraDirection), 0.0), 128.0); 
                 }
 
-                let specularColor = lightColor * specularStrength * specular;
+                let specularColor = moderatedColor * specularStrength * specular;
 
+                // return vec4f(specularColor, 1.0);
                 return vec4f(ambientColor + diffuseColor + specularColor, 1.0);
+
 
 
 
@@ -198,7 +202,7 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat) {
         depthStencil: {
             format: 'depth32float',
             depthWriteEnabled: true,
-            depthCompare: 'less'
+            depthCompare: 'greater'
         },
         multisample: {
             count: 4

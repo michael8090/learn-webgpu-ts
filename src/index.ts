@@ -70,7 +70,7 @@ class Engine {
         this.context = context;
         this.format = format;
 
-        this.camera = new Camera(0.1, 10000, 50, width / height, [0, 0, 0.5]);
+        this.camera = new Camera(0.1, 100000, 50, width / height, [0, 0, 0.5]);
 
         this.initRenderTarget();
 
@@ -89,7 +89,7 @@ class Engine {
                 view: this.depthTexture.createView(),
                 depthLoadOp: 'clear',
                 depthStoreOp: 'store',
-                depthClearValue: 1,
+                depthClearValue: 0,
             }
         };
 

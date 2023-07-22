@@ -1,4 +1,4 @@
-const pot = (v: number) => Math.pow(2, Math.floor(Math.log2(v)));
+const pot = (v: number) => Math.pow(2, Math.ceil(Math.log2(v)));
 
 
 export class ImageLoader {
