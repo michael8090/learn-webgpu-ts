@@ -1,20 +1,45 @@
 import { mat4, Vec3 } from "wgpu-matrix";
 
 export class Mesh {
-    transform = mat4.identity() as Float32Array;
 
-    constructor(public vertex: Float32Array, public index: Uint32Array, public normal: Float32Array, public position: Vec3, public rotation: Vec3, public scale: Vec3, ) {
-        this.update();
+
+    index: Uint32Array;
+    // todo: automatic upload
+    attributes: {
+        position: Float32Array,
+        normal: Float32Array,
+        uv: Float32Array,
+    };
+
+    uniforms: {
+        position: Vec3,
+        rotation: Vec3,
+        scale: Vec3,
+        textureUrl: string,
+        transform: Float32Array;
+
     }
 
-    update() {
-        mat4.scale(mat4.identity(), this.scale, this.transform);
+    constructor(index: Uint32Array, attributes: typeof Mesh.prototype.attributes, uniforms: Omit<typeof Mesh.prototype.uniforms, 'transform'>) {
+        this.index = index;
+        this.attributes = attributes;
+        this.uniforms = {
+            transform: mat4.identity() as Float32Array,
+            ...uniforms
+        };
+        this.updateTransform();
+    }
 
-        mat4.rotate(this.transform, [1, 0, 0], this.rotation[0], this.transform);
-        mat4.rotate(this.transform, [0, 1, 0], this.rotation[1], this.transform);
-        mat4.rotate(this.transform, [0, 0, 1], this.rotation[2], this.transform);
+    updateTransform() {
+        const {uniforms: {scale, rotation, position, transform}} = this;
 
-        mat4.translate(this.transform, this.position, this.transform);
+        mat4.scale(mat4.identity(), scale, transform);
+
+        mat4.rotate(transform, [1, 0, 0], rotation[0], transform);
+        mat4.rotate(transform, [0, 1, 0], rotation[1], transform);
+        mat4.rotate(transform, [0, 0, 1], rotation[2], transform);
+
+        mat4.translate(transform, position, transform);
     }
 }
 

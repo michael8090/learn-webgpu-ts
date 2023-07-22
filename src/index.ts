@@ -3,6 +3,7 @@ import {vec3, mat4, Vec3} from 'wgpu-matrix';
 import { makeMeshPipeline } from "./pipeline";
 import { Mesh } from "./Mesh";
 import { makeCube } from "./shapeBuilder";
+import { ImageLoader } from "./ImageLoader";
 
 class Engine {
     canvas: HTMLCanvasElement;
@@ -26,9 +27,13 @@ class Engine {
     meshPositionBuffers: GPUBuffer[] = [];
     meshIndexBuffers: GPUBuffer[] = [];
     meshNormalBuffers: GPUBuffer[] = [];
+    meshUvBuffers: GPUBuffer[] = [];
 
     meshTransformBuffers: GPUBuffer[] = [];
     meshBindGroups: GPUBindGroup[] = [];
+
+    imageLoader = new ImageLoader();
+    uploadedTextures = new WeakMap<ImageData, {texture: GPUTexture, sampler: GPUSampler}>();
 
     async init() {
         const adapter = await navigator.gpu.requestAdapter();
@@ -79,7 +84,7 @@ class Engine {
 
         this.initCameraBuffer();
 
-        this.initMeshes();
+        await this.initMeshes();
 
 
         this.cameraController = new CameraController(this.camera.transform, () => {
@@ -112,8 +117,8 @@ class Engine {
         device.queue.writeBuffer(this.cameraTransformBuffer, 0, this.camera.transform);
     }
 
-    private initMeshes(n = 10) {
-        const {device, meshPositionBuffers, meshIndexBuffers, meshNormalBuffers, meshTransformBuffers: meshTransforms, meshBindGroups, cameraProjectionBuffer, cameraTransformBuffer} = this;
+    private async initMeshes(n = 10) {
+        const {device, meshPositionBuffers, meshIndexBuffers, meshNormalBuffers, meshUvBuffers, meshTransformBuffers: meshTransforms, meshBindGroups, cameraProjectionBuffer, cameraTransformBuffer} = this;
 
         const r = () => Math.random() * 5;
         const meshes = Array(n).fill(0).map((i) => {
@@ -121,8 +126,8 @@ class Engine {
             return makeCube(s, [r(), r(), r()]);
         });
 
-        meshes.forEach(m => {
-            const {vertex, index, normal, transform} = m;
+        await Promise.all(meshes.map(async m => {
+            const {index, attributes: {position: vertex, normal, uv}, uniforms: {textureUrl, transform}} = m;
             const positionBuffer = device.createBuffer({
                 size: vertex.byteLength,
                 usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
@@ -147,6 +152,29 @@ class Engine {
             device.queue.writeBuffer(normalBuffer, 0, normal);
             meshNormalBuffers.push(normalBuffer);
 
+            const uvBuffer = device.createBuffer({
+                size: uv.byteLength,
+                usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+            });
+            device.queue.writeBuffer(uvBuffer, 0, uv);
+            meshUvBuffers.push(uvBuffer);
+
+            const imageData = await this.imageLoader.getImageData(textureUrl);
+            const cached = this.uploadedTextures.get(imageData);
+            let texture: GPUTexture, sampler: GPUSampler;
+            if (cached) {
+                texture = cached.texture;
+                sampler = cached.sampler;
+            } else {
+                texture = device.createTexture({
+                    size: [imageData.width, imageData.height],
+                    format: 'rgba8unorm',
+                    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
+                });
+                device.queue.writeTexture({texture}, imageData.data, {bytesPerRow: imageData.width * 4}, [imageData.width, imageData.height]);
+    
+                sampler = device.createSampler();
+            }
 
             const meshTransformBuffer = device.createBuffer({
                 size: transform.byteLength,
@@ -166,9 +194,15 @@ class Engine {
                 },{
                     binding: 2,
                     resource: {buffer: meshTransformBuffer},
-                },]
+                }, {
+                    binding: 3,
+                    resource: texture.createView()
+                }, {
+                    binding: 4,
+                    resource: sampler
+                }]
             }))
-        });
+        }));
 
         this.meshes = meshes;
     }
@@ -176,7 +210,7 @@ class Engine {
     private uploadMeshUniforms() {
         const {meshes, meshTransformBuffers, device} = this;
         meshes.forEach((m, i) => {
-            device.queue.writeBuffer(meshTransformBuffers[i], 0, m.transform);
+            device.queue.writeBuffer(meshTransformBuffers[i], 0, m.uniforms.transform);
         });
     }
 
@@ -188,10 +222,10 @@ class Engine {
         // this.cameraState.phi += 0.01;
         // this.cameraState.theta += 0.01;
 
-        this.meshes.forEach(m => {
-            m.rotation[1] += 0.01;
-            m.update();
-        });
+        // this.meshes.forEach(m => {
+        //     m.rotation[1] += 0.01;
+        //     m.update();
+        // });
 
         this.uploadMeshUniforms();
         
@@ -201,7 +235,7 @@ class Engine {
     }
 
     draw() {
-        const {device, pipeline, context, meshes, meshPositionBuffers, meshNormalBuffers, meshBindGroups, renderPassDesc} = this;
+        const {device, pipeline, context, meshes, meshPositionBuffers, meshNormalBuffers, meshUvBuffers, meshBindGroups, renderPassDesc} = this;
         const encoder = device.createCommandEncoder();
 
         renderPassDesc.colorAttachments[0].view = context.getCurrentTexture().createView();
@@ -213,8 +247,9 @@ class Engine {
             pass.setBindGroup(0, meshBindGroups[i]);
             pass.setVertexBuffer(0, meshPositionBuffers[i]);
             pass.setVertexBuffer(1, meshNormalBuffers[i]);
+            pass.setVertexBuffer(2, meshUvBuffers[i]);
             pass.setIndexBuffer(this.meshIndexBuffers[i], 'uint32');
-            pass.draw(meshes[i].vertex.length / 3);
+            pass.draw(meshes[i].attributes.position.length / 3);
         }
 
         pass.end();

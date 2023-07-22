@@ -44,7 +44,7 @@ import { mat4, Vec3, vec3} from "wgpu-matrix";
 
 export function makeCube(size = 2, position = vec3.zero(), rotation = vec3.zero(), scale = [1, 1, 1]): Mesh {
     const cube = getBox(size);
-    return new Mesh(cube.vertexes, cube.indices, cube.normals, position, rotation, scale);
+    return new Mesh(cube.indices, { position: cube.vertexes, normal: cube.normals, uv: cube.uvs}, {position, rotation, scale, textureUrl: '/assets/wukong_512x512.webp'});
 }
 
 const computeNormal = (function() {
@@ -190,6 +190,20 @@ function getBox(size: number) {
     size
   ]);
 
+  const sharedUvs = new Float32Array([
+    // back
+    1, 0,
+    0, 0,
+    0, 1,
+    1, 1,
+
+    // front
+    0, 0,
+    1, 0,
+    1, 1,
+    0, 1,
+  ])
+
   const vertexes = new Float32Array(
     indicesForSharedVertexes.reduce(
       (acc, idx) => {
@@ -205,6 +219,18 @@ function getBox(size: number) {
     )
   );
 
+  const uvs = new Float32Array(
+    indicesForSharedVertexes.reduce((acc, idx) => {
+      const ai = idx * 3;
+      acc.push(
+        sharedUvs[ai],
+        sharedUvs[ai + 1],
+        sharedUvs[ai + 2],
+      )
+      return acc
+    }, [] as number[])
+  );
+
   const idxes: number[] = [];
   for (let i = 0, l = indicesForSharedVertexes.length; i < l; i++) {
     idxes[i] = i;
@@ -215,6 +241,7 @@ function getBox(size: number) {
   return {
     vertexes,
     indices,
-    normals: computeNormal(vertexes, indices)
+    normals: computeNormal(vertexes, indices),
+    uvs
   };
 }
