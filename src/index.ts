@@ -162,14 +162,16 @@ class Engine {
             return makeCube(s, [r(), r(), r()]);
         });
         const lightMesh = makeCube(2, this.light.position);
+        lightMesh.uniforms.textureUrl = '/assets/light.jpg';
+        lightMesh.uniforms.emissiveColor = new Float32Array([.8, .8, .8]);
         meshes.push(lightMesh);
         this.lightIndicator = lightMesh;
 
         const groundMesh = makeCube(2000, [-1000, 5000, -1000], [0, 0, 0], [1, 0.02, 1]);
-        groundMesh.uniforms.textureUrl = '/assets/ground.jpg';
+        groundMesh.uniforms.textureUrl = '/assets/ground.webp';
         meshes.push(groundMesh);
 
-        await Promise.all(meshes.map(async m => {
+        const load = async (m: Mesh) => {
             const {index, attributes: {position: vertex, normal, uv}, uniforms: {textureUrl, transform}} = m;
             const positionBuffer = device.createBuffer({
                 size: vertex.byteLength,
@@ -233,6 +235,12 @@ class Engine {
             device.queue.writeBuffer(cameraPositionBuffer, 0, new Float32Array(this.camera.translate));
             this.cameraPositionBuffer = (cameraPositionBuffer);
 
+            const emissiveColorBuffer = device.createBuffer({
+                size: 12,
+                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+            });
+            device.queue.writeBuffer(emissiveColorBuffer, 0, m.uniforms.emissiveColor);
+
             meshBindGroups.push(device.createBindGroup({
                 layout: this.pipeline.getBindGroupLayout(0),
                 entries: [{
@@ -256,9 +264,14 @@ class Engine {
                 }, {
                     binding: 6,
                     resource: {buffer: cameraPositionBuffer},
+                }, {
+                    binding: 7,
+                    resource: {buffer: emissiveColorBuffer},
                 }]
             }))
-        }));
+        };
+
+        await meshes.reduce((acc, m) => acc.then(() => load(m)), Promise.resolve());
 
         this.meshes = meshes;
     }

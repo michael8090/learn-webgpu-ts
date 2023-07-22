@@ -18,6 +18,7 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat) {
             @group(0) @binding(4) var ourSampler: sampler;
             @group(0) @binding(5) var<uniform> light: Light;
             @group(0) @binding(6) var<uniform> cameraPosition: vec3f;
+            @group(0) @binding(7) var<uniform> emissiveColor: vec3f;
 
 
             struct VertexOutput {
@@ -83,7 +84,7 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat) {
                 let specularColor = moderatedColor * specularStrength * specular;
 
                 // return vec4f(specularColor, 1.0);
-                return vec4f(ambientColor + diffuseColor + specularColor, 1.0);
+                return vec4f(ambientColor + diffuseColor + specularColor + emissiveColor, 1.0);
 
 
 
@@ -152,6 +153,14 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat) {
         }, {
             // camera position
             binding: 6,
+            visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+            buffer: {
+                type: 'uniform' as const,
+                minBindingSize: 12
+            }
+        }, {
+            // emissive color
+            binding: 7,
             visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
             buffer: {
                 type: 'uniform' as const,

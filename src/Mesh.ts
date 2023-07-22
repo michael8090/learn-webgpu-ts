@@ -17,7 +17,7 @@ export class Mesh {
         scale: Vec3,
         textureUrl: string,
         transform: Float32Array;
-
+        emissiveColor: Float32Array;
     }
 
     constructor(index: Uint32Array, attributes: typeof Mesh.prototype.attributes, uniforms: Omit<typeof Mesh.prototype.uniforms, 'transform'>) {
