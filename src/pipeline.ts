@@ -17,12 +17,14 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat) {
             @group(0) @binding(3) var ourTexture: texture_2d<f32>;
             @group(0) @binding(4) var ourSampler: sampler;
             @group(0) @binding(5) var<uniform> light: Light;
+            @group(0) @binding(6) var<uniform> cameraPosition: vec3f;
 
 
             struct VertexOutput {
                 @builtin(position) position: vec4f,
                 @location(0) normal: vec3f,
                 @location(1) uv: vec2f,
+                @location(2) vPosition: vec3f,
             }
 
             @vertex
@@ -32,17 +34,27 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat) {
                 vsOut.position = projectMatrix * viewMatrix * modelMatrix * p;
                 vsOut.normal = normal;
                 vsOut.uv = uv;
+                vsOut.vPosition = (modelMatrix * p).xyz;
                 return vsOut;
             }
 
+            fn isWithin(x: f32) -> bool {
+                return x > -1.0 && x < 1.0;
+            }
+
+            fn isAllWithin(v: vec3f) -> bool {
+                return isWithin(v.x) && isWithin(v.y) && isWithin(v.z);
+            }
 
             @fragment
             fn mainFs(vsOut: VertexOutput) -> @location(0) vec4f {
                 let diffuseTextureColor = textureSample(ourTexture, ourSampler, vsOut.uv).xyz;
                 // return vec4f((p.xy + 1.0) * 0.5, 1.0, 1.0);
                 let spotLightPosition = (light.position).xyz;
+                // let spotLightPosition = (light.position).xyz / light.position.w;
+
                 let lightColor = light.color;
-                let position = vsOut.position.xyz;
+                let position = vsOut.vPosition.xyz;
 
                 let lightD = position - spotLightPosition;
                 let lightDirection = normalize(lightD);
@@ -57,16 +69,30 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat) {
                 let diffuse = max(dot(-lightDirection, normal), 0.0);
                 let diffuseColor = lightColor * diffuse;
               
-                // // specular
-                // let specularStrength = 0.5;
-                // let reflectDirection = normalize(reflect(lightDirection, normal));
-                // let cameraPosition = vec
-                // let eyeDirection = normalize(u_eye_pos - position);
-                // let specular = pow(max(dot(reflectDirection, eyeDirection), 0.0), 256.0); 
-                // let specularColor = lightColor * specularStrength * specular;
-                return vec4f(ambientColor + diffuseColor, 1.0);
+                // specular
+                let specularStrength = 1.0;
+                var specular = 0.0;
+                if (dot(-lightDirection, normal) > 0.0) {
+                    let reflectDirection = normalize(reflect(lightDirection, normal));
+                    let cameraDirection = normalize(cameraPosition - position);
+                    specular = pow(max(dot(reflectDirection, cameraDirection), 0.0), 128.0); 
+                }
 
-                // return vec4f(position * 0.5 + 0.5, 1.0);
+                let specularColor = lightColor * specularStrength * specular;
+
+                return vec4f(ambientColor + diffuseColor + specularColor, 1.0);
+
+
+
+                // let isWithinBox = isWithin(position.x) && isWithin(position.y) && isWithin(position.z);
+
+                // var debugColor = vec4f(0.0, 1.0, 0.0, 1.0);
+                // if (!isAllWithin(position / vsOut.position.w)) {
+                //     debugColor = vec4f(0.0, 0.0, 1.0, 1.0);
+                // }
+                // return debugColor;
+
+                // return vec4f(position  * 0.5 + 0.5, 1.0);
             }
         `
     });
@@ -83,7 +109,7 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat) {
         }, {
             // transform matrix
             binding: 1,
-            visibility: GPUShaderStage.VERTEX,
+            visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
             buffer: {
                 type: 'uniform' as const,
                 minBindingSize: mat4Size
@@ -118,6 +144,14 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat) {
             buffer: {
                 type: 'uniform' as const,
                 minBindingSize: 32
+            }
+        }, {
+            // camera position
+            binding: 6,
+            visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+            buffer: {
+                type: 'uniform' as const,
+                minBindingSize: 12
             }
         }]
     })
@@ -165,6 +199,9 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat) {
             format: 'depth32float',
             depthWriteEnabled: true,
             depthCompare: 'less'
+        },
+        multisample: {
+            count: 4
         }
         // primitive: {
         //     topology: 'triangle-list'

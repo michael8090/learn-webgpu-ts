@@ -39,6 +39,9 @@ class Engine {
     light = new SpotLight([0, 0, 0], [1, 1, 1]);
     lightBuffer: GPUBuffer;
     lightIndicator: Mesh;
+    renderTexture: GPUTexture;
+    renderTextureView: GPUTextureView;
+    cameraPositionBuffer: GPUBuffer;
 
     async init() {
         const adapter = await navigator.gpu.requestAdapter();
@@ -69,12 +72,15 @@ class Engine {
 
         this.camera = new Camera(0.1, 10000, 50, width / height, [0, 0, 0.5]);
 
+        this.initRenderTarget();
+
         this.pipeline = makeMeshPipeline(device, format);
         this.initDepthTexture();
 
         this.renderPassDesc = {
             colorAttachments: [{
-                view: context.getCurrentTexture().createView(),
+                view: this.renderTextureView,
+                resolveTarget: context.getCurrentTexture().createView(),
                 loadOp: 'clear' as const,
                 storeOp: 'store' as const,
                 clearValue: {r: 0, g: 0, b: 0, a: 1},
@@ -83,7 +89,7 @@ class Engine {
                 view: this.depthTexture.createView(),
                 depthLoadOp: 'clear',
                 depthStoreOp: 'store',
-                depthClearValue: 1
+                depthClearValue: 1,
             }
         };
 
@@ -100,21 +106,24 @@ class Engine {
         this.cameraController.start(this.canvas);
     }
 
-    private getProjectedLightBuffer() {
-        const l = this.light.position;
-        let p = vec4.fromValues(l[0], l[1], l[2], 1);
-        vec4.transformMat4(p, this.camera.transform, p);
-        vec4.transformMat4(p, this.camera.projection, p);
-        let ret = [];
-        ret = ret.concat(Array.from(p)).concat(this.light.color).concat([0]);
-        return new Float32Array(ret);
+    private initRenderTarget() {
+        const {device, width, height, format} = this;
+        const texture = device.createTexture({
+            size: [width, height],
+            sampleCount: 4,
+            format: format,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT,
+          });
+        this.renderTexture = texture;
+        this.renderTextureView = texture.createView();
     }
 
     private initDepthTexture() {
         const texture = this.device.createTexture({
             size: [this.width, this.height],
             format: 'depth32float',
-            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+            sampleCount: 4,
         });
         this.depthTexture = texture;
     }
@@ -140,7 +149,8 @@ class Engine {
             size: 32,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
-        device.queue.writeBuffer(this.lightBuffer, 0, this.getProjectedLightBuffer());
+        this.light.updateBuffer();
+        device.queue.writeBuffer(this.lightBuffer, 0, this.light.buffer);
     }
 
     private async initMeshes(n = 100) {
@@ -151,9 +161,13 @@ class Engine {
             const s = Math.random() * n * 0.15;
             return makeCube(s, [r(), r(), r()]);
         });
-        const lightMesh = makeCube(10, this.light.position);
+        const lightMesh = makeCube(2, this.light.position);
         meshes.push(lightMesh);
         this.lightIndicator = lightMesh;
+
+        const groundMesh = makeCube(2000, [-1000, 5000, -1000], [0, 0, 0], [1, 0.02, 1]);
+        groundMesh.uniforms.textureUrl = '/assets/ground.jpg';
+        meshes.push(groundMesh);
 
         await Promise.all(meshes.map(async m => {
             const {index, attributes: {position: vertex, normal, uv}, uniforms: {textureUrl, transform}} = m;
@@ -212,6 +226,13 @@ class Engine {
             device.queue.writeBuffer(meshTransformBuffer, 0, transform);
             meshTransforms.push(meshTransformBuffer);
 
+            const cameraPositionBuffer = device.createBuffer({
+                size: 12,
+                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+            });
+            device.queue.writeBuffer(cameraPositionBuffer, 0, new Float32Array(this.camera.translate));
+            this.cameraPositionBuffer = (cameraPositionBuffer);
+
             meshBindGroups.push(device.createBindGroup({
                 layout: this.pipeline.getBindGroupLayout(0),
                 entries: [{
@@ -232,6 +253,9 @@ class Engine {
                 }, {
                     binding: 5,
                     resource: {buffer: lightBuffer},
+                }, {
+                    binding: 6,
+                    resource: {buffer: cameraPositionBuffer},
                 }]
             }))
         }));
@@ -248,6 +272,7 @@ class Engine {
 
     private uploadCameraState() {
         this.device.queue.writeBuffer(this.cameraTransformBuffer, 0, this.camera.transform);
+        this.device.queue.writeBuffer(this.cameraPositionBuffer, 0, new Float32Array(this.camera.translate));
     }
 
     private t = 0;
@@ -262,10 +287,11 @@ class Engine {
         // });
 
         this.t++;
-        const phi = this.t * 0.05;
+        const phi = this.t * 0.01;
         const r = 25;
         this.light.position = [r * Math.cos(phi), 0, r * Math.sin(phi)];
-        this.device.queue.writeBuffer(this.lightBuffer, 0, this.getProjectedLightBuffer());
+        this.light.updateBuffer();
+        this.device.queue.writeBuffer(this.lightBuffer, 0, this.light.buffer);
 
         this.lightIndicator.uniforms.position = this.light.position;
         this.lightIndicator.updateTransform();
@@ -280,7 +306,9 @@ class Engine {
         const {device, pipeline, context, meshes, meshPositionBuffers, meshNormalBuffers, meshUvBuffers, meshBindGroups, renderPassDesc} = this;
         const encoder = device.createCommandEncoder();
 
-        renderPassDesc.colorAttachments[0].view = context.getCurrentTexture().createView();
+        renderPassDesc.colorAttachments[0].view = this.renderTexture.createView();
+        renderPassDesc.colorAttachments[0].resolveTarget = context.getCurrentTexture().createView();
+
         const pass = encoder.beginRenderPass(renderPassDesc);
 
         pass.setPipeline(pipeline);
