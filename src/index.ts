@@ -318,7 +318,7 @@ class Engine {
         this.light.updateBuffer();
         this.device.queue.writeBuffer(this.lightBuffer, 0, this.light.buffer);
 
-        this.lightIndicator.uniforms.position = this.light.position;
+        this.lightIndicator.uniforms.translate = this.light.position;
         this.lightIndicator.updateTransform();
         this.uploadMeshUniforms();
         

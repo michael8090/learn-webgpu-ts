@@ -44,7 +44,7 @@ import { mat4, Vec3, vec3} from "wgpu-matrix";
 
 export function makeCube(size = 2, position = vec3.zero(), rotation = vec3.zero(), scale = [1, 1, 1]): Mesh {
     const cube = getBox(size);
-    return new Mesh(cube.indices, { position: cube.vertexes, normal: cube.normals, uv: cube.uvs}, {position, rotation, scale, textureUrl: '/assets/cube.jpg', emissiveColor: new Float32Array([0, 0, 0])});
+    return new Mesh(cube.indices, { position: cube.vertexes, normal: cube.normals, uv: cube.uvs}, {translate: position, rotation, scale, textureUrl: '/assets/cube.jpg', emissiveColor: new Float32Array([0, 0, 0])});
 }
 
 const computeNormal = (function() {
