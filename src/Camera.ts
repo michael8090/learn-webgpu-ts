@@ -85,7 +85,7 @@ export class CameraController {
 
             if (e.buttons === 1) {
                 // left to rotate
-                const dPhi = dx;
+                const dPhi = -dx;
                 const dTheta = dy;
     
                 cameraState.theta = Math.min(Math.max(cameraState.theta + dTheta * speed, 0.0001), Math.PI - 0.0001);
