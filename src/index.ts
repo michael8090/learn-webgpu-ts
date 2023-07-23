@@ -1,5 +1,5 @@
 import { Camera, CameraController } from "./Camera";
-import {vec3, vec4, mat4, Vec3} from 'wgpu-matrix';
+import {vec3, vec4, mat4, Vec3, mat3} from 'wgpu-matrix';
 import { makeMeshPipeline } from "./pipeline";
 import { Mesh } from "./Mesh";
 import { makeCube } from "./shapeBuilder";
@@ -32,6 +32,7 @@ class Engine {
 
     meshTransformBuffers: GPUBuffer[] = [];
     meshBindGroups: GPUBindGroup[] = [];
+    meshNormalMatrixBuffers: GPUBuffer[] = []
 
     imageLoader = new ImageLoader();
     uploadedTextures = new WeakMap<ImageData, {texture: GPUTexture, sampler: GPUSampler}>();
@@ -228,6 +229,13 @@ class Engine {
             device.queue.writeBuffer(meshTransformBuffer, 0, transform);
             meshTransforms.push(meshTransformBuffer);
 
+            const meshNormalMatrixBuffer = device.createBuffer({
+                size: 48, //4 * 3x4
+                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+            });
+            device.queue.writeBuffer(meshNormalMatrixBuffer, 0, new Float32Array(mat3.copy(mat4.transpose(mat4.inverse(m.uniforms.transform)))));
+            this.meshNormalMatrixBuffers.push(meshNormalMatrixBuffer);
+
             const cameraPositionBuffer = device.createBuffer({
                 size: 12,
                 usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
@@ -267,6 +275,9 @@ class Engine {
                 }, {
                     binding: 7,
                     resource: {buffer: emissiveColorBuffer},
+                }, {
+                    binding: 8,
+                    resource: {buffer: meshNormalMatrixBuffer},
                 }]
             }))
         };
@@ -277,9 +288,10 @@ class Engine {
     }
 
     private uploadMeshUniforms() {
-        const {meshes, meshTransformBuffers, device} = this;
+        const {meshes, meshTransformBuffers, meshNormalMatrixBuffers, device} = this;
         meshes.forEach((m, i) => {
             device.queue.writeBuffer(meshTransformBuffers[i], 0, m.uniforms.transform);
+            device.queue.writeBuffer(meshNormalMatrixBuffers[i], 0, new Float32Array(mat3.copy(mat4.transpose(mat4.inverse(m.uniforms.transform)))));
         });
     }
 

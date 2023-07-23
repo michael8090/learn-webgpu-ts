@@ -66,6 +66,7 @@ async function f() {
         outfile: 'build/index.js',
         assetNames: '[name]',
         entryNames: '[name]',
+        sourcemap: 'inline',
         // plugins: [wasmPlugin],
         // format: 'esm',
         // tsconfig: ,

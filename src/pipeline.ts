@@ -19,7 +19,7 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat) {
             @group(0) @binding(5) var<uniform> light: Light;
             @group(0) @binding(6) var<uniform> cameraPosition: vec3f;
             @group(0) @binding(7) var<uniform> emissiveColor: vec3f;
-
+            @group(0) @binding(8) var<uniform> normalMatrix: mat3x4<f32>;
 
             struct VertexOutput {
                 @builtin(position) position: vec4f,
@@ -33,7 +33,9 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat) {
                 var vsOut: VertexOutput;
                 let p = vec4f(pos, 1.0);
                 vsOut.position = projectMatrix * viewMatrix * modelMatrix * p;
-                vsOut.normal = normal;
+
+                // wgsl requires mat3x4*vec3 or vec4*mat3x4, wtf??? why use such a strange order? wgsl hates developers?
+                vsOut.normal = (vec4f(normal, 1) * normalMatrix).xyz;
                 vsOut.uv = uv;
                 vsOut.vPosition = (modelMatrix * p).xyz;
                 return vsOut;
@@ -165,6 +167,14 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat) {
             buffer: {
                 type: 'uniform' as const,
                 minBindingSize: 12
+            }
+        }, {
+            // normal matrix
+            binding: 8,
+            visibility: GPUShaderStage.VERTEX,
+            buffer: {
+                type: 'uniform' as const,
+                minBindingSize: 48,
             }
         }]
     })
