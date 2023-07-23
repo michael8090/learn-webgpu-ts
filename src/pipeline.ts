@@ -117,7 +117,16 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat, un
                 let p = vec4f(vsInput.pos, 1.0);
                 vsOut.position = projectMatrix * viewMatrix * modelMatrix * p;
 
-                // wgsl requires mat3x4*vec3 or vec4*mat3x4, wtf??? why use such a strange order? wgsl hates developers?
+                /// wgsl requires mat3x4*vec3 or vec4*mat3x4, wtf??? why use such a strange order? Does wgsl hate developers?
+                /// it turns out an conversion glsl uses: @see [here](https://www.khronos.org/opengl/wiki/Data_Type_(GLSL)#:~:text=matnxm%3A%20A%20matrix%20with%20n%20columns%20and%20m%20rows%20(examples%3A%20mat2x2%2C%20mat4x3).%20Note%20that%20this%20is%20backward%20from%20convention%20in%20mathematics!)
+                /// mat3x4 means 4 rows 3 columns(in math it means 3 rows 4 columns), vec3 is 3rows 1 column, so mat3x4 * vec4 mat4x1, which is vec4
+                /// let's look at vec4*mat3x4.
+                /// it looks like matrix of 4x1 multiplies matrix of 4x3, which is invalid
+                /// but glsl has another rule: when vector is on the left of the multiplication, the column vector automatically becomes a row rector
+                /// @see [here](https://en.wikibooks.org/wiki/GLSL_Programming/Vector_and_Matrix_Operations#:~:text=If%20a%20vector%20is%20multiplied%20to%20a%20matrix%20from%20the%20left%2C%20the%20result%20corresponds%20to%20multiplying%20a%20row%20vector%20from%20the%20left%20to%20the%20matrix.%20This%20corresponds%20to%20multiplying%20a%20column%20vector%20to%20the%20transposed%20matrix%20from%20the%20right%3A)
+                /// so, vec4 * mat3x4 means, 1x4 * 4x3, which is 1x3, and it's a row vector, but glsl is **smart** enough to turn it into a column vector
+                /// I think the rules are overcomplicated for no reason.
+                /// So yes, glsl hates developers.
                 vsOut.normal = (vec4f(vsInput.normal, 1) * normalMatrix).xyz;
                 vsOut.uv = vsInput.uv;
                 vsOut.vPosition = (modelMatrix * p).xyz;
