@@ -1,5 +1,11 @@
 import { AttributeDesc, UniformDesc } from "./GpuResources";
 import { ImageLoader } from "./ImageLoader";
+import {MeshDesc} from './Mesh'
+
+type ArrayElement<T> =
+    T extends readonly (infer ElementType)[] ? ElementType : never;
+//   ArrayType extends readonly (infer ElementType:)[] ? ElementType : never;
+
 
 interface UploaderConfig {
     index?: {
@@ -18,17 +24,19 @@ interface UploaderConfig {
 
 }
 
+// type A = typeof MeshDesc;
+// let a: 'index' | ArrayElement<A['attributes']>['name'] | ArrayElement<A['uniforms']>['name'] = '';
+
 const imageLoader = new ImageLoader();
 
-export class Uploader {
+export class Uploader<T extends UploaderConfig, U extends string = 'index' | ArrayElement<T['attributes']>['desc']['name'] | ArrayElement<T['uniforms']>['desc']['name']> {
     gpuResources: {[key: string]: GPUBuffer | GPUTexture | GPUSampler} = {}
 
-    constructor(public config: UploaderConfig) {
-
+    constructor(public config: T) {
     }
 
     // I assume the data is immutable, so I only allocate gpu resources of a fixed sizes
-    async upload(device: GPUDevice, name: string) {
+    async upload(device: GPUDevice, name: U) {
         const {config} = this;
         if (name === 'index') {
             // update index buffer
