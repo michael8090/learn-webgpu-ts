@@ -29,7 +29,7 @@ class Engine {
     renderTexture: GPUTexture;
     renderTextureView: GPUTextureView;
     uniformDesc: UniformDesc[];
-    attributeDesc: readonly AttributeDesc[];
+    attributeDesc: AttributeDesc[];
 
     async init() {
         const adapter = await navigator.gpu.requestAdapter();
@@ -167,7 +167,7 @@ class Engine {
                     const entry = item.uploader.config.uniforms!.map((u) => {
                         const name = u.desc.name;
                         const uploadedResource =
-                            item.uploader.gpuResources[name];
+                            item.uploader.getGpuResource(name);
                         const type = u.desc.type;
                         if (type === "buffer") {
                             return {
@@ -279,12 +279,12 @@ class Engine {
             this.attributeDesc.forEach(({ name }, i) => {
                 pass.setVertexBuffer(
                     i,
-                    mesh.uploader.gpuResources[name] as GPUBuffer
+                    mesh.uploader.getGpuResource(name) as GPUBuffer
                 );
             });
 
             pass.setIndexBuffer(
-                mesh.uploader.gpuResources.index as GPUBuffer,
+                mesh.uploader.getGpuResource('index') as GPUBuffer,
                 "uint32"
             );
             pass.draw(meshes[i].attributes.position.length / 3);

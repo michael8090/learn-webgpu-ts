@@ -1,6 +1,6 @@
 import { AttributeDesc, UniformDesc } from "./GpuResources";
 import { ImageLoader } from "./ImageLoader";
-import {MeshDesc} from './Mesh'
+// import {MeshDesc} from './Mesh'
 
 type ArrayElement<T> =
     T extends readonly (infer ElementType)[] ? ElementType : never;
@@ -25,18 +25,22 @@ interface UploaderConfig {
 }
 
 // type A = typeof MeshDesc;
-// let a: 'index' | ArrayElement<A['attributes']>['name'] | ArrayElement<A['uniforms']>['name'] = '';
+// let a: 'index' | ArrayElement<A['attributes']>['name'] | ArrayElement<A['uniforms']>['name'] = 'diffuseTexture';
 
 const imageLoader = new ImageLoader();
 
-export class Uploader<T extends UploaderConfig, U extends string = 'index' | ArrayElement<T['attributes']>['desc']['name'] | ArrayElement<T['uniforms']>['desc']['name']> {
-    gpuResources: {[key: string]: GPUBuffer | GPUTexture | GPUSampler} = {}
+export class Uploader<T extends UploaderConfig> {
+    private gpuResources: {[key: string]: GPUBuffer | GPUTexture | GPUSampler | undefined} = {}
 
     constructor(public config: T) {
     }
 
+    getGpuResource(name: 'index' | ArrayElement<T['attributes']>['desc']['name'] | ArrayElement<T['uniforms']>['desc']['name']) {
+        return this.gpuResources[name];
+    }
+
     // I assume the data is immutable, so I only allocate gpu resources of a fixed sizes
-    async upload(device: GPUDevice, name: U) {
+    async upload(device: GPUDevice, name: 'index' | ArrayElement<T['attributes']>['desc']['name'] | ArrayElement<T['uniforms']>['desc']['name']) {
         const {config} = this;
         if (name === 'index') {
             // update index buffer
