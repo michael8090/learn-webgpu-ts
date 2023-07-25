@@ -1,9 +1,24 @@
 import { mat4, Mat4, Vec3, vec3} from "wgpu-matrix";
+import { UniformDesc } from "./GpuResources";
+import { Uploader } from "./Uploader";
 
 const depthRangeRemapMatrix = mat4.identity();
 depthRangeRemapMatrix[10] = -1;
 depthRangeRemapMatrix[14] = 1;
 
+export const CameraUniformDesc = [{
+        name: 'projectMatrix',
+        type: 'buffer',
+        dataType: 'mat4x4<f32>',
+    },{
+        name: 'viewMatrix',
+        type: 'buffer',
+        dataType: 'mat4x4<f32>',
+    }, {
+        name: 'cameraPosition',
+        type: 'buffer',
+        dataType: 'vec3f',
+    }] as const satisfies readonly UniformDesc[];
 
 export class Camera {
     projection = mat4.create() as Float32Array;
@@ -33,6 +48,19 @@ export class Camera {
         // mat4.identity(this.transform);
         // mat4.translate(this.transform, this.translate, this.transform);
     }
+
+    uploader = new Uploader({
+        uniforms: [{
+            desc: CameraUniformDesc[0],
+            getCpuData: () => this.projection,
+        }, {
+            desc: CameraUniformDesc[1],
+            getCpuData: () => this.transform,
+        }, {
+            desc: CameraUniformDesc[2],
+            getCpuData: () => new Float32Array(this.translate),
+        }]
+    });
 
 }
 
@@ -128,7 +156,7 @@ export class CameraController {
         listenNode.addEventListener('mousedown', this.onMouseDown);
         listenNode.addEventListener('mousemove', this.onMouseMove);
         listenNode.addEventListener('mouseup', this.onMouseUp);
-        listenNode.addEventListener('mousewheel', this.onMouseWheel);
+        listenNode.addEventListener('wheel', this.onMouseWheel);
         listenNode.addEventListener('contextmenu', this.onContextMenu);
 
     }

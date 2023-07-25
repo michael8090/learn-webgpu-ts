@@ -1,6 +1,6 @@
-import { mat4, Vec3 } from "wgpu-matrix";
+import { mat3, mat4, Vec3 } from "wgpu-matrix";
 import { AttributeDesc, UniformDesc } from "./GpuResources";
-import { ImageLoader } from "./ImageLoader";
+import { Uploader } from "./Uploader";
 
 // function makeEngineClass(attributes: AttributeDesc[], uniforms: UniformDesc[]) {
 //     return class {
@@ -20,119 +20,6 @@ import { ImageLoader } from "./ImageLoader";
 //     constructor(public attributes: AttributeDesc[], uniforms: UniformDesc[]) {}
 // }
 
-interface UploaderConfig {
-    index: {
-        getCpuData(): Uint32Array;
-    }
-
-    attributes: Array<{
-        getCpuData(): any;
-        desc: AttributeDesc;
-    }>
-
-    uniforms: Array<{
-        getCpuData(): any;
-        desc: UniformDesc;
-    }>
-
-}
-class Uploader {
-    gpuResources: {[key: string]: GPUBuffer | GPUTexture | GPUSampler} = {}
-
-    constructor(public config: UploaderConfig) {
-
-    }
-
-    // I assume the data is immutable, so I only allocate gpu resources of a fixed sizes
-    async upload(device: GPUDevice, name: string) {
-        const {config} = this;
-        if (name === 'index') {
-            // update index buffer
-            let gpuResource = this.gpuResources[name] as GPUBuffer;
-            const indexData = config.index.getCpuData();
-            if (!gpuResource) {
-                gpuResource = device.createBuffer({
-                    size: indexData.byteLength,
-                    usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST
-                });
-                this.gpuResources[name] = gpuResource;
-            }
-            device.queue.writeBuffer(gpuResource, 0, indexData);
-        }
-        const {attributes, uniforms} = config;
-
-        const attribute = attributes.find(ad => ad.desc.name === name);
-        if (!!attribute) {
-            // upload attribute
-            const attributeData = attribute.getCpuData() as Float32Array;
-            let gpuResource = this.gpuResources[name] as GPUBuffer;
-            if (!gpuResource) {
-                gpuResource = device.createBuffer({
-                    size: attributeData.byteLength,
-                    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
-                });
-                this.gpuResources[name] = gpuResource;
-                device.queue.writeBuffer(gpuResource, 0, attributeData);
-            }
-
-        } else {
-            const uniform = uniforms.find(u => u.desc.name === name);
-            if (!!uniform) {
-                // upload uniform
-
-                if (uniform.desc.type === 'buffer') {
-                    const uniformData =  uniform.getCpuData() as Float32Array;
-                    let gpuResource = this.gpuResources[name] as GPUBuffer;
-                    if (!gpuResource) {
-                        gpuResource = device.createBuffer({
-                            size: uniformData.byteLength,
-                            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-                        });
-                        this.gpuResources[name] = gpuResource;
-                    }
-                    device.queue.writeBuffer(gpuResource, 0, uniformData);
-                } else if (uniform.desc.type === 'sampler') {
-                    let gpuResource = this.gpuResources[name] as GPUSampler;
-                    if (!gpuResource) {
-                        gpuResource = device.createSampler();
-                        this.gpuResources[name] = gpuResource;
-                    }
-                } else if (uniform.desc.type === 'texture') {
-                    // const uniformPropertyName = name + 'Url';
-                    // const url = this.uniforms[uniformPropertyName] as string;
-                    const url = uniform.getCpuData() as string;
-                    const imageData = await imageLoader.getImageData(url);
-
-                    let gpuResource = this.gpuResources[name] as GPUTexture;
-                    if (!gpuResource) {
-                        gpuResource = device.createTexture({
-                            size: [imageData.width, imageData.height],
-                            format: 'rgba8unorm',
-                            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
-                        });
-                        this.gpuResources[name] = gpuResource;
-                    }
-                    device.queue.writeTexture({texture: gpuResource}, imageData.data, {bytesPerRow: imageData.width * 4}, [imageData.width, imageData.height]);
-                }
-            } else {
-                throw `${name} is not a gpu resource for current uploader. Attributes: ${JSON.stringify(.attributes.map(a => a.desc.name))} . \nUniforms: ${JSON.stringify(uniforms.map(u => u.desc.name))}`;
-            }
-        }
-    }
-
-    async uploadAll(device: GPUDevice) {
-        const {config: {index, attributes, uniforms}} = this;
-        await this.upload(device, 'index');
-        for (let {desc: {name}} of attributes) {
-            await this.upload(device, name);
-        }
-        for (let {desc: {name}} of uniforms) {
-            await this.upload(device, name);
-        }
-    }
-}
-
-const imageLoader = new ImageLoader();
 
 
 // maybe we can generate it automatically
@@ -148,7 +35,7 @@ export const MeshDesc = {
         dataType: 'vec2f',
     }],
     uniforms: [{
-        name: 'transform',
+        name: 'modelMatrix',
         type: 'buffer',
         dataType: 'mat4x4<f32>',
     },{
@@ -156,12 +43,16 @@ export const MeshDesc = {
         type: 'buffer',
         dataType: 'vec3f',
     }, {
-        name: 'texture',
+        name: 'diffuseTexture',
         type: 'texture',
         dataType: 'f32'
     }, {
-        name: 'sampler',
+        name: 'diffuseSampler',
         type: 'sampler'
+    }, {
+        name: 'normalMatrix',
+        type: 'buffer',
+        dataType: 'mat3x4<f32>',
     }]
 } as const satisfies {attributes: readonly AttributeDesc[], uniforms: readonly UniformDesc[]};
 
@@ -170,7 +61,6 @@ type ArrayElement<ArrayType extends readonly unknown[]> =
 
 export class Mesh {
     index: Uint32Array;
-    // todo: automatic upload
     attributes: {
         position: Float32Array,
         normal: Float32Array,
@@ -214,6 +104,9 @@ export class Mesh {
         },{
             desc: MeshDesc.uniforms[3],
             getCpuData: () => null
+        }, {
+            desc: MeshDesc.uniforms[4],
+            getCpuData: () => new Float32Array(mat3.copy(mat4.transpose(mat4.inverse(this.uniforms.transform))))
         }
     ]
     })
@@ -240,7 +133,6 @@ export class Mesh {
         mat4.translate(transform, translate, transform);
     }
 
-    // I assume the data is immutable, so I only allocate gpu resources of a fixed sizes
     async upload(device: GPUDevice, name: 'index' | ArrayElement<typeof MeshDesc['attributes']>['name'] | ArrayElement<typeof MeshDesc['uniforms']>['name']) {
         await this.uploader.upload(device, name);
     }

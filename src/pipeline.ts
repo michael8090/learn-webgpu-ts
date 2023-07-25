@@ -4,9 +4,9 @@ const isBufferUniform = (desc: UniformDesc): desc is BufferUniformDesc => desc.t
 const isTextureUniform = (desc: UniformDesc): desc is TextureUniformDesc => desc.type === 'texture';
 const isSamplerUniform = (desc: UniformDesc): desc is SamplerUniformDesc => desc.type === 'sampler';
 
-function buildBindGroupEntries(uniforms: UniformDesc[]): GPUBindGroupLayoutEntry[] {
+function buildBindGroupEntries(uniforms: readonly UniformDesc[]): GPUBindGroupLayoutEntry[] {
     // sort the uniforms in alphabet order
-    return uniforms.sort((a, b) => a.name < b.name ? -1 : 1).map((desc, i) => {
+    return uniforms.concat([]).sort((a, b) => a.name < b.name ? -1 : 1).map((desc, i) => {
         if (isBufferUniform(desc)) {
             return ({
                 // buffer
@@ -39,14 +39,15 @@ function buildBindGroupEntries(uniforms: UniformDesc[]): GPUBindGroupLayoutEntry
                 },
             });
         }
+        throw `invalid type ${desc}`;
     });
 }
 
-function buildUniformShaderDeclarations(uniforms: UniformDesc[]) {
+function buildUniformShaderDeclarations(uniforms: readonly UniformDesc[]) {
     // sort the uniforms in alphabet order
-    return uniforms.sort((a, b) => a.name < b.name ? -1 : 1).map((desc, i) => {
+    return uniforms.concat([]).sort((a, b) => a.name < b.name ? -1 : 1).map((desc, i) => {
         if (isBufferUniform(desc)) {
-            return `@group(0) @binding(${i++}) var<uniform> ${desc.name}: ${desc.dataType}`;
+            return `@group(0) @binding(${i++}) var<uniform> ${desc.name}: ${desc.dataType};`;
         }
         if (isTextureUniform(desc)) {
             return `@group(0) @binding(${i++}) var ${desc.name}: texture_2d<${desc.dataType}>;`;
@@ -57,27 +58,29 @@ function buildUniformShaderDeclarations(uniforms: UniformDesc[]) {
     }).join('\n');
 }
 
-function buildVertexBufferLayouts(attributes: AttributeDesc[]): GPUVertexBufferLayout[] {
+function buildVertexBufferLayouts(attributes: readonly AttributeDesc[]): GPUVertexBufferLayout[] {
     // sort the attributes in alphabet order
-    return attributes.sort((a, b) => a.name < b.name ? -1 : 1).map((desc, i) => ({
+    return attributes.concat([]).sort((a, b) => a.name < b.name ? -1 : 1).map((desc, i) => ({
         arrayStride: WgslDataTypes[desc.dataType],
         attributes: [{
-            format: WgslAttributeDataTypeAlias[desc.dataType],
+            format: (WgslAttributeDataTypeAlias as any)[desc.dataType],
             offset: 0,
             shaderLocation: i
         }]
     }))
 }
 
-function buildVertexShaderDeclarations(attributes: AttributeDesc[]) {
+function buildVertexShaderDeclarations(attributes: readonly AttributeDesc[]) {
     return `
 struct VertexInput {
-    ${attributes.sort((a, b) => a.name < b.name ? -1 : 1).map((desc, i) => `@location(i) ${desc.name}: ${desc.dataType},`).join('\n    ')}
+    ${attributes.concat([]).sort((a, b) => a.name < b.name ? -1 : 1).map((desc, i) => `@location(${i}) ${desc.name}: ${desc.dataType},`).join('\n    ')}
 }
 `;
 }
 
-export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat, uniforms: UniformDesc[], attributes: AttributeDesc[]) {
+export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat, uniforms: readonly UniformDesc[], attributes: readonly AttributeDesc[]) {
+    const uniformDeclarations = buildUniformShaderDeclarations(uniforms);
+    const vertexShaderDeclarations = buildVertexShaderDeclarations(attributes);
     const shaderModule = device.createShaderModule({
         code: /* wgsl */`
             // struct Light {
@@ -95,14 +98,14 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat, un
             // @group(0) @binding(7) var<uniform> emissiveColor: vec3f;
             // @group(0) @binding(8) var<uniform> normalMatrix: mat3x4<f32>;
 
-            ${buildUniformShaderDeclarations(uniforms)}
+            ${uniformDeclarations}
 
             // struct VertexInput {
-            //     @location(0) pos: vec3f,
+            //     @location(0) position: vec3f,
             //     @location(1) normal: vec3f,
             //     @location(2) uv: vec2f,
             // }
-            ${buildVertexShaderDeclarations(attributes)}
+            ${vertexShaderDeclarations}
 
             struct VertexOutput {
                 @builtin(position) position: vec4f,
@@ -114,7 +117,7 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat, un
             @vertex
             fn mainVs(vsInput: VertexInput) -> VertexOutput {
                 var vsOut: VertexOutput;
-                let p = vec4f(vsInput.pos, 1.0);
+                let p = vec4f(vsInput.vertexPosition, 1.0);
                 vsOut.position = projectMatrix * viewMatrix * modelMatrix * p;
 
                 /// wgsl requires mat3x4*vec3 or vec4*mat3x4, wtf??? why use such a strange order? Does wgsl hate developers?
@@ -143,7 +146,7 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat, un
 
             @fragment
             fn mainFs(vsOut: VertexOutput) -> @location(0) vec4f {
-                let diffuseTextureColor = textureSample(ourTexture, ourSampler, vsOut.uv).xyz;
+                let diffuseTextureColor = textureSample(diffuseTexture, diffuseSampler, vsOut.uv).xyz;
                 // return vec4f((p.xy + 1.0) * 0.5, 1.0, 1.0);
                 let spotLightPosition = (lightPosition).xyz;
                 // let spotLightPosition = (light.position).xyz / light.position.w;
@@ -197,78 +200,7 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat, un
     });
 
     const bindGroupLayout = device.createBindGroupLayout({
-        // entries: [{
-        //     // projection matrix
-        //     binding: 0,
-        //     visibility: GPUShaderStage.VERTEX,
-        //     buffer: {
-        //         type: 'uniform' as const,
-        //         minBindingSize: mat4Size
-        //     }
-        // }, {
-        //     // transform matrix
-        //     binding: 1,
-        //     visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-        //     buffer: {
-        //         type: 'uniform' as const,
-        //         minBindingSize: mat4Size
-        //     }
-        // }, {
-        //     // model matrix
-        //     binding: 2,
-        //     visibility: GPUShaderStage.VERTEX,
-        //     buffer: {
-        //         type: 'uniform' as const,
-        //         minBindingSize: mat4Size
-        //     }
-        // }, {
-        //     // texture
-        //     binding: 3,
-        //     visibility: GPUShaderStage.FRAGMENT,
-        //     texture: {
-        //         sampleType: 'float' as const,
-        //         viewDimension: '2d' as const,
-        //     }
-        // }, {
-        //     // sampler
-        //     binding: 4,
-        //     visibility: GPUShaderStage.FRAGMENT,
-        //     sampler: {
-        //         type: 'filtering' as const
-        //     },
-        // }, {
-        //     // light color & position, 12 + 12, but as there is padding, so we need 16 + 16
-        //     binding: 5,
-        //     visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-        //     buffer: {
-        //         type: 'uniform' as const,
-        //         minBindingSize: 32
-        //     }
-        // }, {
-        //     // camera position
-        //     binding: 6,
-        //     visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-        //     buffer: {
-        //         type: 'uniform' as const,
-        //         minBindingSize: 12
-        //     }
-        // }, {
-        //     // emissive color
-        //     binding: 7,
-        //     visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-        //     buffer: {
-        //         type: 'uniform' as const,
-        //         minBindingSize: 12
-        //     }
-        // }, {
-        //     // normal matrix
-        //     binding: 8,
-        //     visibility: GPUShaderStage.VERTEX,
-        //     buffer: {
-        //         type: 'uniform' as const,
-        //         minBindingSize: 48,
-        //     }
-        // }]
+
         entries: buildBindGroupEntries(uniforms)
     })
 
@@ -278,31 +210,6 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat, un
         vertex: {
             module: shaderModule,
             entryPoint: 'mainVs',
-            // buffers: [{
-            //     // position, todo: perspective normal
-            //     arrayStride: 12,
-            //     attributes: [{
-            //         format: 'float32x3' as const,
-            //         offset: 0,
-            //         shaderLocation: 0
-            //     }]
-            // }, {
-            //     // normal
-            //     arrayStride: 12,
-            //     attributes: [{
-            //         format: 'float32x3' as const,
-            //         offset: 0,
-            //         shaderLocation: 1
-            //     }]
-            // }, {
-            //     // uv
-            //     arrayStride: 8,
-            //     attributes: [{
-            //         format: 'float32x2' as const,
-            //         offset: 0,
-            //         shaderLocation: 2
-            //     }]
-            // }]
             buffers: buildVertexBufferLayouts(attributes)
         },
         fragment: {
