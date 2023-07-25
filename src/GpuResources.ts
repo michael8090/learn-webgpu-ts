@@ -18,9 +18,10 @@ export interface BufferUniformDesc {
     dataType: keyof typeof WgslDataTypes
 }
 
-export interface SamplerUniformDesc {
+export interface SamplerUniformDesc extends GPUSamplerDescriptor {
     name: string,
-    type: 'sampler'
+    type: 'sampler',
+
 }
 
 export interface TextureUniformDesc {
