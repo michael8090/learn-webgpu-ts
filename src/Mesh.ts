@@ -133,13 +133,13 @@ export class Mesh {
         mat4.translate(transform, translate, transform);
     }
 
-    async upload(device: GPUDevice, name: 'index' | ArrayElement<typeof MeshDesc['attributes']>['name'] | ArrayElement<typeof MeshDesc['uniforms']>['name']) {
-        await this.uploader.upload(device, name);
-    }
+    // async upload(device: GPUDevice, name: 'index' | ArrayElement<typeof MeshDesc['attributes']>['name'] | ArrayElement<typeof MeshDesc['uniforms']>['name']) {
+    //     await this.uploader.upload(device, name);
+    // }
 
-    async uploadAll(device: GPUDevice) {
-        await this.uploader.uploadAll(device);
-    }
+    // async uploadAll(device: GPUDevice) {
+    //     await this.uploader.uploadAll(device);
+    // }
 }
 
 

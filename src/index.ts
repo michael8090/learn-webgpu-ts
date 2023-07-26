@@ -160,14 +160,20 @@ class Engine {
         meshes.push(groundMesh);
 
         const load = async (m: Mesh) => {
-            await m.uploadAll(device);
+            await m.uploader.uploadAll(device);
+            // this.light.uploader.upload(device, '')
+            // this.camera.uploader.upload(device, '')
+            // m.uploader.upload(device, '')
+
+            // [this.light, this.camera, m].map(item => item.uploader.)
 
             const bindGroupEntries = [this.light, this.camera, m]
                 .reduce((acc, item) => {
                     const entry = item.uploader.config.uniforms!.map((u) => {
                         const name = u.desc.name;
                         const uploadedResource =
-                            item.uploader.getGpuResource(name);
+                            // the never is a dirty hack
+                            item.uploader.getGpuResource(name as never);
                         const type = u.desc.type;
                         if (type === "buffer") {
                             return {
@@ -217,7 +223,7 @@ class Engine {
     private uploadMeshUniforms() {
         const { meshes, device } = this;
         meshes.forEach((m) => {
-            m.upload(device, "modelMatrix");
+            m.uploader.upload(device, "modelMatrix");
         });
     }
 
@@ -263,9 +269,9 @@ class Engine {
         } = this;
         const encoder = device.createCommandEncoder();
 
-        (renderPassDesc.colorAttachments as any)[0].view =
+        (renderPassDesc.colorAttachments as GPURenderPassColorAttachment[])[0].view =
             this.renderTexture.createView();
-        (renderPassDesc.colorAttachments as any)[0].resolveTarget = context
+        (renderPassDesc.colorAttachments as GPURenderPassColorAttachment[])[0].resolveTarget = context
             .getCurrentTexture()
             .createView();
 
@@ -279,7 +285,7 @@ class Engine {
             this.attributeDesc.forEach(({ name }, i) => {
                 pass.setVertexBuffer(
                     i,
-                    mesh.uploader.getGpuResource(name) as GPUBuffer
+                    mesh.uploader.getGpuResource(name as any) as GPUBuffer
                 );
             });
 

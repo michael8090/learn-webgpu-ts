@@ -6,7 +6,6 @@ type ArrayElement<T> =
     T extends readonly (infer ElementType)[] ? ElementType : never;
 //   ArrayType extends readonly (infer ElementType:)[] ? ElementType : never;
 
-
 interface UploaderConfig {
     index?: {
         getCpuData(): Uint32Array;
@@ -29,18 +28,20 @@ interface UploaderConfig {
 
 const imageLoader = new ImageLoader();
 
-export class Uploader<T extends UploaderConfig> {
+type Names<T extends UploaderConfig> = (T['index'] extends Object ? 'index' : never) | ArrayElement<T['attributes']>['desc']['name'] | ArrayElement<T['uniforms']>['desc']['name'];
+
+export class Uploader<T extends UploaderConfig, U extends string = Names<T>> {
     private gpuResources: {[key: string]: GPUBuffer | GPUTexture | GPUSampler | undefined} = {}
 
     constructor(public config: T) {
     }
 
-    getGpuResource(name: 'index' | ArrayElement<T['attributes']>['desc']['name'] | ArrayElement<T['uniforms']>['desc']['name']) {
+    getGpuResource(name: U) {
         return this.gpuResources[name];
     }
 
     // I assume the data is immutable, so I only allocate gpu resources of a fixed sizes
-    async upload(device: GPUDevice, name: 'index' | ArrayElement<T['attributes']>['desc']['name'] | ArrayElement<T['uniforms']>['desc']['name']) {
+    async upload(device: GPUDevice, name: U) {
         const {config} = this;
         if (name === 'index') {
             // update index buffer
@@ -120,16 +121,16 @@ export class Uploader<T extends UploaderConfig> {
     async uploadAll(device: GPUDevice) {
         const {config: {index, attributes, uniforms}} = this;
         if (!!index) {
-            await this.upload(device, 'index');
+            await this.upload(device, 'index' as U);
         }
         if (!!attributes) {
             for (let {desc: {name}} of attributes) {
-                await this.upload(device, name);
+                await this.upload(device, name as U);
             }
         }
         if (!!uniforms) {
             for (let {desc: {name}} of uniforms) {
-                await this.upload(device, name);
+                await this.upload(device, name as U);
             }
         }
     }
