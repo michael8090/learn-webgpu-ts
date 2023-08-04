@@ -1,84 +1,11 @@
-import { UniformDesc, BufferUniformDesc, TextureUniformDesc, SamplerUniformDesc, WgslDataTypes, AttributeDesc, WgslAttributeDataTypeAlias } from "./GpuResources";
+import { UniformDesc, AttributeDesc } from "../GpuResources";
+import { buildUniformShaderDeclarations, buildVertexShaderDeclarations, buildBindGroupEntries, buildVertexBufferLayouts } from "./pipelineUtils";
+import {MeshDesc} from '../Mesh';
+import {CameraUniformDesc} from '../Camera';
+import {SpotLightUniformDesc} from '../SpotLight';
 
-const isBufferUniform = (desc: UniformDesc): desc is BufferUniformDesc => desc.type === 'buffer';
-const isTextureUniform = (desc: UniformDesc): desc is TextureUniformDesc => desc.type === 'texture';
-const isSamplerUniform = (desc: UniformDesc): desc is SamplerUniformDesc => desc.type === 'sampler';
 
-function buildBindGroupEntries(uniforms: readonly UniformDesc[]): GPUBindGroupLayoutEntry[] {
-    // sort the uniforms in alphabet order
-    return uniforms.concat([]).sort((a, b) => a.name < b.name ? -1 : 1).map((desc, i) => {
-        if (isBufferUniform(desc)) {
-            return ({
-                // buffer
-                binding: i,
-                visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-                buffer: {
-                    type: 'uniform' as const,
-                    minBindingSize: WgslDataTypes[desc.dataType]
-                }
-            });
-        }
-        if (isTextureUniform(desc)) {
-            return ({
-                // texture
-                binding: i,
-                visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-                texture: {
-                    sampleType: 'float' as const,
-                    viewDimension: '2d' as const,
-                }
-            });
-        }
-        if (isSamplerUniform(desc)) {
-            return ({
-                // sampler
-                binding: i,
-                visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-                sampler: {
-                    type: 'filtering' as const
-                },
-            });
-        }
-        throw `invalid type ${desc}`;
-    });
-}
-
-function buildUniformShaderDeclarations(uniforms: readonly UniformDesc[]) {
-    // sort the uniforms in alphabet order
-    return uniforms.concat([]).sort((a, b) => a.name < b.name ? -1 : 1).map((desc, i) => {
-        if (isBufferUniform(desc)) {
-            return `@group(0) @binding(${i++}) var<uniform> ${desc.name}: ${desc.dataType};`;
-        }
-        if (isTextureUniform(desc)) {
-            return `@group(0) @binding(${i++}) var ${desc.name}: texture_2d<${desc.dataType}>;`;
-        }
-        if (isSamplerUniform(desc)) {
-            return `@group(0) @binding(${i++}) var ${desc.name}: sampler;`;
-        }
-    }).join('\n');
-}
-
-function buildVertexBufferLayouts(attributes: readonly AttributeDesc[]): GPUVertexBufferLayout[] {
-    // sort the attributes in alphabet order
-    return attributes.concat([]).sort((a, b) => a.name < b.name ? -1 : 1).map((desc, i) => ({
-        arrayStride: WgslDataTypes[desc.dataType],
-        attributes: [{
-            format: (WgslAttributeDataTypeAlias as any)[desc.dataType],
-            offset: 0,
-            shaderLocation: i
-        }]
-    }))
-}
-
-function buildVertexShaderDeclarations(attributes: readonly AttributeDesc[]) {
-    return `
-struct VertexInput {
-    ${attributes.concat([]).sort((a, b) => a.name < b.name ? -1 : 1).map((desc, i) => `@location(${i}) ${desc.name}: ${desc.dataType},`).join('\n    ')}
-}
-`;
-}
-
-export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat, uniforms: readonly UniformDesc[], attributes: readonly AttributeDesc[]) {
+export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat, uniforms: [...typeof CameraUniformDesc, ...typeof SpotLightUniformDesc, ...typeof MeshDesc.uniforms], attributes: typeof MeshDesc.attributes) {
     const uniformDeclarations = buildUniformShaderDeclarations(uniforms);
     const vertexShaderDeclarations = buildVertexShaderDeclarations(attributes);
     const shaderModule = device.createShaderModule({
@@ -137,7 +64,7 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat, un
             }
 
             fn isWithin(x: f32) -> bool {
-                return x > -1.0 && x < 1.0;
+                return x >= -1.0 && x <= 1.0;
             }
 
             fn isAllWithin(v: vec3f) -> bool {
@@ -185,28 +112,22 @@ export function makeMeshPipeline(device: GPUDevice, format: GPUTextureFormat, un
 
 
 
-
-                // let isWithinBox = isWithin(position.x) && isWithin(position.y) && isWithin(position.z);
-
                 // var debugColor = vec4f(0.0, 1.0, 0.0, 1.0);
-                // if (!isAllWithin(position / vsOut.position.w)) {
+                // // if (!isAllWithin((vsOut.position / vsOut.position.w).xyz)) {
+                // if (!isWithin(vsOut.position.z)) {
                 //     debugColor = vec4f(0.0, 0.0, 1.0, 1.0);
                 // }
                 // return debugColor;
 
-                // return vec4f(position  * 0.5 + 0.5, 1.0);
+                // return vec4f(vsOut.position.x / 802.0, vsOut.position.y / 1000.0, 1.0, 1.0);
             }
         `
     });
 
-    const bindGroupLayout = device.createBindGroupLayout({
-
-        entries: buildBindGroupEntries(uniforms)
-    })
-
-
     const pipelineDesc: GPURenderPipelineDescriptor = {
-        layout: device.createPipelineLayout({bindGroupLayouts: [bindGroupLayout]}),
+        layout: device.createPipelineLayout({bindGroupLayouts: [device.createBindGroupLayout({
+            entries: buildBindGroupEntries(uniforms)
+        })]}),
         vertex: {
             module: shaderModule,
             entryPoint: 'mainVs',

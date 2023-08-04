@@ -1,5 +1,5 @@
 import { Camera, CameraController, CameraUniformDesc } from "./Camera";
-import { makeMeshPipeline } from "./pipeline";
+import { makeMeshPipeline } from "./pipelines/phongShading";
 import { Mesh, MeshDesc } from "./Mesh";
 import { makeCube } from "./shapeBuilder";
 import { SpotLight, SpotLightUniformDesc } from "./SpotLight";
