@@ -44,43 +44,57 @@ So we can come up with two things:
     ```
 
 Shader decides the input the output type. And input data decides the draw_mode and input_range.
+We can define a **decoupling** concept called `InputComponent` to describe the input data components for different functionalities, such as Transform or Phong.
+Drawing Purpose can provide new InputComponent into the registry, and have a list of interested InputComponents. By query the all the DisplayObjects with the interested components, it can get the interested component data.
+A DrawingPurpose owns the shader it uses. The shader decides what is the input and output layouts are, together with the Drawing Purpose. And then DrawingPurpose and InputData decide what is the drawing method and drawing range.
+But a shader fragment should not be **owned** by a DisplayObject: the same display object could use different shading logic under different drawing purpose, such as one in phong and the other one in shadow map generating.
+So DrawingPurpose should own the shading logic(i.e. the shader fragment), and provide the corresponding data structure for DisplayObject to feed data into.
 
-Drawing Purpose decides which DisplayObjects to collect, and from the them builds a full shader. The shader decides what is the input and output layouts are, together with Drawing Purpose. And then Drawing Purpose and Input Data decide what is the drawing method and drawing range. The whole causality relationship is as below:
+So we get: DrawingPurpose -> InputComponent -> DisplayObject.
+
+The whole causality relationship is as below:
 
 ```mermaid
 graph LR;
 subgraph renderer
-A(Drawing Purpose) --> B(shader) --> C(input)
+A(Drawing Purpose) -- owns --> B(shader) --> C(input structure)
                                B --> C1(output layout)
+                A-- owns --> A1(Interested InputComponents)
                 A--> C1(output layout)
-                A--> E(input data) --> F(draw_mode & input_range)
-                A--> F
+                A--> F(draw_mode)
 end
 
-subgraph concrete DisplayObjects
-a1(DisplayObject) --> a6(DataStruct) --> a2
-                a1--> a7(shader logic string)
-                a7-->a2(shader fragment)
-                a6--> a3(input layout fragment)
-                a2--> a4(output desc fragment)
-                a6--> a5(input data fragment)
+A -. provides .-> InputComponent
+
+subgraph InputComponent
+Transform
+Phong
+...
 end
 
-A -. chooses to collect a array of interested DisplayObject .- a1
+subgraph s0 [concrete DisplayObjects]
+a1(DisplayObject) --> a2(input data fragment)
+end
+InputComponent -.->s0
+
 
 ```
 
-So here comes a builder pattern:
+The whole process looks like:
 
 ```ts
-// before rendering, at init time
-let (shader_fragments, input_layout_fragments, output_desc_fragments) = collect(DisplayObjects)
-let shader = buildFullShader(shader_fragments)
-let drawing_purpose = build_drawing_purpose(
-                        shader, // we can choose to get the input/output descs from shader or from the collected fragments
-                        output_layout// optional, if not set, decided by shader 
-                    ) 
+// predefined InputComponents
+let InputComponents = [Transform, Phong, IndexBuffer, VertexBuffer]
+
+class MyDrawingPurpose {
+    static shader = ...;
+    static output_layout = ...;
+    static interestedInputComponents = [Transform, IndexBuffer, VertexBuffer]
+}
 
 // at rendering time
-drawing_purpose(input_data, draw_mode /*optional, if not set, decided by input_data*/, input_range/*optional, if not set, decided by input_data*/)
+let input_data = collect(DisplayObjects, MyDrawingPurpose.interestedInputComponents)
+myDrawingPurpose.draw(input_data, draw_mode /*optional, if not set, decided by input_data*/, input_range/*optional, if not set, decided by input_data*/)
 ```
+
+Question: How do DrawingPurposes share the same GPU resource? How should we design the uploader?
