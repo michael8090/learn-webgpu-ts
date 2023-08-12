@@ -2,7 +2,7 @@
 
 I'm thinking about a better structure for the whole rendering, and the key is to figure out what is the cause and what is the effect.
 
-for a rendering task, it needs to decide the following things:
+For a rendering task, it needs to decide the following things:
 
 ```ts
 rendering(
@@ -64,13 +64,14 @@ a1(DisplayObject) --> a6(DataStruct) --> a2
                 a6--> a5(input data fragment)
 end
 
-a1 -. collect a array of DisplayObject .-> A
+A -. chooses to collect a array of interested DisplayObject .- a1
 
 ```
 
-So here some a builder pattern:
+So here comes a builder pattern:
 
 ```ts
+// before rendering, at init time
 let (shader_fragments, input_layout_fragments, output_desc_fragments) = collect(DisplayObjects)
 let shader = buildFullShader(shader_fragments)
 let drawing_purpose = build_drawing_purpose(
@@ -78,5 +79,6 @@ let drawing_purpose = build_drawing_purpose(
                         output_layout// optional, if not set, decided by shader 
                     ) 
 
+// at rendering time
 drawing_purpose(input_data, draw_mode /*optional, if not set, decided by input_data*/, input_range/*optional, if not set, decided by input_data*/)
 ```
