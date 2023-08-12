@@ -45,6 +45,8 @@ So we can come up with two things:
 
 Shader decides the input the output type. And input data decides the draw_mode and input_range.
 
+Drawing Purpose decides which DisplayObjects to collect, and from the them builds a full shader. The shader decides what is the input and output layouts are, together with Drawing Purpose. And then Drawing Purpose and Input Data decide what is the drawing method and drawing range. The whole causality relationship is as below:
+
 ```mermaid
 graph LR;
 subgraph renderer
