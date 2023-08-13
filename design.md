@@ -76,8 +76,6 @@ subgraph s0 [concrete DisplayObjects]
 a1(DisplayObject) --> a2(input data fragment)
 end
 InputComponent -.->s0
-
-
 ```
 
 The whole process looks like:
