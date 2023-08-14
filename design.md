@@ -95,9 +95,7 @@ let input_data = collect(DisplayObjects, MyDrawingPurpose.interestedInputCompone
 myDrawingPurpose.draw(input_data, draw_mode /*optional, if not set, decided by input_data*/, input_range/*optional, if not set, decided by input_data*/)
 ```
 
-Question: How do DrawingPurposes share the same GPU resource? How should we design the uploader?
-
-One thing I might have done right is that I already has a `Uploader` for every possible DisplayObject, though it should be corrected to make every ShaderComponent has an uploader instead of every DisplayObject.
+If we take GPU Resource Manager into account, the whole structure should be like:
 
 ```mermaid
 graph LR;
