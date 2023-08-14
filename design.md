@@ -96,3 +96,54 @@ myDrawingPurpose.draw(input_data, draw_mode /*optional, if not set, decided by i
 ```
 
 Question: How do DrawingPurposes share the same GPU resource? How should we design the uploader?
+
+One thing I might have done right is that I already has a `Uploader` for every possible DisplayObject, though it should be corrected to make every ShaderComponent has an uploader instead of every DisplayObject.
+
+```mermaid
+graph LR;
+subgraph DrawingPurpose
+A(Drawing Purpose/material_dispatcher, process node, pass node) -- owns --> B(shader) --> C(input structure)
+                               B --> C1(output layout)
+                A-- owns --> A1(Interested InputComponents)
+                A--> C1(output layout)
+                A--> F(draw_mode)
+end
+
+A -. provides .-> InputComponent
+
+subgraph InputComponent
+Transform -.-> u1
+Phong -.-> u2
+... -.-> u3
+subgraph Uploader
+u1(TransformUploader)
+u2(PhongUploader)
+u3(...)
+end
+end
+
+InputComponent -.-> s0
+
+subgraph s0 [concrete DisplayObjects]
+a1(DisplayObject) --> a2(input data fragment)
+end
+
+
+DrawingPurpose -.-> Renderer
+
+subgraph Renderer
+r0(shader)
+r1(pipeline)
+r2(bindgroup)
+r3(index_buffer & vertex_buffer)
+end
+
+subgraph GPUResourceManager
+buffer
+texture 
+sampler
+end
+
+DrawingPurpose -.-> GPUResourceManager
+
+```
