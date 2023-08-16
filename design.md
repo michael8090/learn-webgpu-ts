@@ -98,26 +98,30 @@ myDrawingPurpose.draw(input_data, draw_mode /*optional, if not set, decided by i
 If we take GPU Resource Manager into account, the whole structure should be like:
 
 ```mermaid
-graph LR;
+graph TD;
 subgraph DrawingPurpose
-A(Drawing Purpose/material_dispatcher, process node, pass node) -- owns --> B(shader) --> C(input structure)
+A(DrawingPurpose) -- owns --> B(shader) --> C(input structure)
                                B --> C1(output layout)
                 A-- owns --> A1(Interested InputComponents)
                 A--> C1(output layout)
                 A--> F(draw_mode)
 end
 
+subgraph Uploader
+uploadBuffer
+uploadTexture
+end
+
+A1 --> Uploader
+Uploader --> GPUResourceManager
+GPUResourceManager --> Renderer
 A -. provides .-> InputComponent
 
 subgraph InputComponent
-Transform -.-> u1
-Phong -.-> u2
-... -.-> u3
-subgraph Uploader
-u1(TransformUploader)
-u2(PhongUploader)
-u3(...)
-end
+i>only the data structure, no shader]
+Transform
+Phong
+...
 end
 
 InputComponent -.-> s0
@@ -126,8 +130,10 @@ subgraph s0 [concrete DisplayObjects]
 a1(DisplayObject) --> a2(input data fragment)
 end
 
+s0 --> A1
 
-DrawingPurpose -.-> Renderer
+
+DrawingPurpose --> Renderer
 
 subgraph Renderer
 r0(shader)
@@ -141,7 +147,5 @@ buffer
 texture 
 sampler
 end
-
-DrawingPurpose -.-> GPUResourceManager
 
 ```
