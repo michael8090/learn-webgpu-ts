@@ -99,38 +99,47 @@ If we take GPU Resource Manager into account, the whole structure should be like
 
 ```mermaid
 graph TD;
+
 subgraph DrawingPurpose
-A(DrawingPurpose) -- owns --> B(shader) --> C(input structure)
-                               B --> C1(output layout)
-                A-- owns --> A1(Interested InputComponents)
-                A--> C1(output layout)
-                A--> F(draw_mode)
+
+drawing_purpose(DrawingPurpose) 
+
+drawing_purpose -- owns --> shader_fragments(ShaderFragments)
+drawing_purpose -- owns --> interested_input_components(Interested InputComponents)
+
+interested_input_components --> present_interested_input_components(present interested input components)
+present_interested_input_components --> shader(shader)
+shader --> input_layout(input layout: pipeline, bindGroupLayout)
+shader --> output_layout(output layout: texture, is_depth_enabled, ...)
+drawing_purpose --> output_layout
+drawing_purpose --> draw_command(draw mode & draw range)
+present_interested_input_components --> draw_command 
 end
+
+DrawingPurpose -. provides .-> InputComponent
 
 subgraph Uploader
 uploadBuffer
 uploadTexture
 end
 
-A1 --> Uploader
+present_interested_input_components --> Uploader
 Uploader --> GPUResourceManager
 GPUResourceManager --> Renderer
-A -. provides .-> InputComponent
 
 subgraph InputComponent
-i>only the data structure, no shader]
-Transform
-Phong
-...
+component_struct(Component Struct)
+uniform_desc(uniform name, type)
+vertex_attribute_desc(vertex attribute name, type)
 end
 
-InputComponent -.-> s0
+InputComponent -.-> DisplayObjects
 
-subgraph s0 [concrete DisplayObjects]
-a1(DisplayObject) --> a2(input data fragment)
+subgraph DisplayObjects[DisplayObjects]
+_do((input component data))
 end
 
-s0 --> A1
+DisplayObjects -->  present_interested_input_components 
 
 
 DrawingPurpose --> Renderer
@@ -138,8 +147,10 @@ DrawingPurpose --> Renderer
 subgraph Renderer
 r0(shader)
 r1(pipeline)
-r2(bindgroup)
+r2(bindGroup)
 r3(index_buffer & vertex_buffer)
+r4(draw mode & draw range)
+r5(output texture)
 end
 
 subgraph GPUResourceManager
@@ -148,4 +159,13 @@ texture
 sampler
 end
 
+```
+
+The `shader` node in `DrawingPurpose` is a little bit more complicated than it seems. To get the full shader, a DrawingPurpose needs to traverse the input DisplayObjects and to see how many types are actually present, and gets the PresentInterestedInputComponents. From it, we can build the final full shader and the full input layout.
+
+```ts
+// at rendering time, not init time
+interestedInputComponents = inputDisplayObjects.filter(i => InterestedInputComponents.has(i.type))
+PresentInterestedInputComponents = interestedInputComponents.map(i => i.type)
+(shader, inputLayout, outputLayout) = build(PresentInterestedInputComponents)
 ```
