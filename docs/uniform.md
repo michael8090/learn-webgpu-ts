@@ -5,20 +5,20 @@ graph LR;
 
 uniforms(uniforms)
 
-subgraph global_uniforms[global uniforms]
+subgraph global_uniforms[global uniforms, UBO0]
 Camera
 Light
 ...
 end
 
-subgraph transform_related_uniforms[transform related uniforms]
+subgraph transform_related_uniforms[transform related uniforms, UBO1]
 InstanceTransforms
 Transform
 NormalMatrix
 ...
 end
 
-subgraph material_related_uniforms[material related uniforms]
+subgraph material_related_uniforms[material related uniforms, UBO2]
 PhongMaterial
 ...
 end
