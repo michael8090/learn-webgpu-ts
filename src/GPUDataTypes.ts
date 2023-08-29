@@ -2,29 +2,6 @@
 
 // the explanation is: https://gist.github.com/teoxoy/936891c16c2a3d1c3c5e7204ac6cd76c
 
-export interface GpuDataType {
-    align(): number;
-    size(): number;
-}
-
-const scalarOf4Bytes: GpuDataType = {
-    align() {
-        return 4;
-    },
-    size() {
-        return 4;
-    },
-};
-
-const scalarOf2Bytes: GpuDataType = {
-    align() {
-        return 2;
-    },
-    size() {
-        return 2;
-    },
-};
-
 export enum Scalar {
     i32,
     u32,
@@ -97,29 +74,54 @@ export function Array<T extends LeafTypes | StructType>(
 }
 
 export class StructType {
-    protected __for_nominal_type__: never;
-    readonly [key: string]:
-        | LeafTypes
-        | ArrayType<LeafTypes | StructType>
-        | StructType;
+    /**
+     * The struct name to be generated in shader
+     */
+    constructor(
+        protected readonly name: string,
+        protected readonly properties: {
+            readonly [key: string]:
+                | LeafTypes
+                | ArrayType<LeafTypes | StructType>
+                | StructType;
+        }
+    ) {}
 }
 
-export function Struct(obj: {
-    [name: string]: LeafTypes | ArrayType<LeafTypes | StructType> | StructType;
-}) {
-    return Object.assign(new StructType(), obj) as StructType;
+const structMap = new Map<string, StructType>();
+export function Struct(
+    name: string,
+    properties?: {
+        [name: string]:
+            | LeafTypes
+            | ArrayType<LeafTypes | StructType>
+            | StructType;
+    }
+) {
+    const existedStruct = structMap.get(name);
+    if (properties === undefined) {
+        if (existedStruct === undefined) {
+            throw `no struct ${name} is defined`;
+        }
+        return existedStruct;
+    }
+    if (existedStruct !== undefined) {
+        throw `the struct ${name} is already defined`;
+    }
+    const s = new StructType(name, properties);
+    structMap.set(name, s);
+    return s;
 }
 
-let s = Struct({
+let s = Struct('Struct1', {
     a: Vec['vec2<f16>'],
     b: Matrix['mat2x2<f16>'],
     c: Scalar.f16,
     d: Array(Vec['vec2<f16>'], 100),
-    e: Struct({
+    e: Struct('Struct2', {
         a1: Scalar.f16,
     }),
+    // f will reference to the defined struct, without introduce new struct type
+    f: Struct('Struct2'),
 });
-let a = s.a;
-Vec['vec2<f16>'];
-Vec['vec2<f16>'];
-Vec['vec2<f16>'];
+// let a = s.a;
