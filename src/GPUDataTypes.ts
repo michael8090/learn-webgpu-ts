@@ -11,8 +11,8 @@ export enum Scalar {
 
 export class VecType {
     constructor(
-        protected readonly componentCount: number,
-        protected readonly componentType: Scalar
+        readonly componentCount: number,
+        readonly componentType: Scalar
     ) {}
 }
 
@@ -32,9 +32,9 @@ export const Vec = (() => {
 
 export class MatrixType {
     constructor(
-        protected readonly rowCount: number,
-        protected readonly columnCount: number,
-        protected readonly componentType: Scalar
+        readonly rowCount: number,
+        readonly columnCount: number,
+        readonly componentType: Scalar
     ) {}
 }
 
@@ -59,10 +59,10 @@ export const Matrix = (() => {
 
 type LeafTypes = Scalar | VecType | MatrixType;
 
-export class ArrayType<T extends LeafTypes | StructType> {
+export class ArrayType {
     constructor(
-        protected readonly elementType: T,
-        protected readonly count: number
+        readonly elementType: LeafTypes | StructType,
+        readonly count: number
     ) {}
 }
 
@@ -78,11 +78,11 @@ export class StructType {
      * The struct name to be generated in shader
      */
     constructor(
-        protected readonly name: string,
-        protected readonly properties: {
+        readonly name: string,
+        readonly properties: {
             readonly [key: string]:
                 | LeafTypes
-                | ArrayType<LeafTypes | StructType>
+                | ArrayType
                 | StructType;
         }
     ) {}
@@ -94,7 +94,7 @@ export function Struct(
     properties?: {
         [name: string]:
             | LeafTypes
-            | ArrayType<LeafTypes | StructType>
+            | ArrayType
             | StructType;
     }
 ) {

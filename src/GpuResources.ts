@@ -1,3 +1,4 @@
+import {MatrixType, VecType, Scalar, ArrayType, StructType} from './GPUDataTypes';
 export const WgslDataTypes = {
     'mat4x4<f32>': 4*4*4,
     'mat3x4<f32>': 3*4*4,
@@ -15,7 +16,7 @@ export const WgslAttributeDataTypeAlias = {
 export interface BufferUniformDesc {
     name: string,
     type: 'buffer'
-    dataType: keyof typeof WgslDataTypes
+    dataType: MatrixType | VecType | Scalar | ArrayType | StructType
 }
 
 export interface SamplerUniformDesc extends GPUSamplerDescriptor {

@@ -1,6 +1,7 @@
 import { mat3, mat4, Vec3 } from "wgpu-matrix";
 import { AttributeDesc, UniformDesc } from "./GpuResources";
 import { Uploader } from "./Uploader";
+import {Matrix, Vec} from './GPUDataTypes';
 
 // function makeEngineClass(attributes: AttributeDesc[], uniforms: UniformDesc[]) {
 //     return class {
@@ -37,11 +38,11 @@ export const MeshDesc = {
     uniforms: [{
         name: 'modelMatrix',
         type: 'buffer',
-        dataType: 'mat4x4<f32>',
+        dataType: Matrix["mat4x4<f32>"],
     },{
         name: 'emissiveColor',
         type: 'buffer',
-        dataType: 'vec3f',
+        dataType: Vec["vec3<f32>"],
     }, {
         name: 'diffuseTexture',
         type: 'texture',
@@ -52,7 +53,7 @@ export const MeshDesc = {
     }, {
         name: 'normalMatrix',
         type: 'buffer',
-        dataType: 'mat3x4<f32>',
+        dataType: Matrix["mat3x4<f32>"],
     }]
 } as const satisfies {attributes: readonly AttributeDesc[], uniforms: readonly UniformDesc[]};
 
