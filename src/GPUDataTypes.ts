@@ -80,11 +80,8 @@ export class StructType {
     constructor(
         readonly name: string,
         readonly properties: Array<{
-            readonly name: string,
-            readonly type:
-                | LeafTypes
-                | ArrayType
-                | StructType;
+            readonly name: string;
+            readonly type: LeafTypes | ArrayType | StructType;
         }>
     ) {}
 }
@@ -93,10 +90,7 @@ const structMap = new Map<string, StructType>();
 export function Struct(
     name: string,
     properties?: {
-        [name: string]:
-            | LeafTypes
-            | ArrayType
-            | StructType;
+        [name: string]: LeafTypes | ArrayType | StructType;
     }
 ) {
     const existedStruct = structMap.get(name);
@@ -109,8 +103,10 @@ export function Struct(
     if (existedStruct !== undefined) {
         throw `the struct ${name} is already defined`;
     }
-    // todo: we need to sort the properties here
-    const s = new StructType(name, Object.entries(properties).map(([name, type]) => ({name, type})));
+    const s = new StructType(
+        name,
+        Object.entries(properties).map(([name, type]) => ({ name, type }))
+    );
     structMap.set(name, s);
     return s;
 }
@@ -128,42 +124,107 @@ let s = Struct('Struct1', {
     f: Struct('Struct2'),
 });
 
+// the key in a desc will be a top level uniform name if the struct is a toplevel struct
+// and a toplevel struct will not appear in the shader, only the fields are inserted into shader.
+interface Desc {
+    [key: string]: LeafTypes | ArrayType | StructType;
+}
+
 // in shader component
+
+/**
+ * for Struct, keys in schema are the property names
+ * for array, keys in schema are the number index of items
+ * // todo: for array we can reduce the memory by use the same schema for the item
+ */
+type Schema = {
+    [key: Exclude<string, '__offset__' | '__size__' | '__type__'>]: Schema;
+} & {
+    __offset__: number;
+    __size__: number;
+    __type__: LeafTypes | ArrayType | StructType;
+};
 
 type Mat4 = {};
 type Vec3 = {};
 class Camera {
     project: Mat4;
-    
-    static desc = {
-        project: Matrix["mat4x4<f32>"]
+
+    static getDesc(): Desc {
+        return {
+            project: Matrix['mat4x4<f32>'],
+        };
     }
 }
 class PointLight {
     color: Vec3;
     position: Vec3;
-    
-    static desc = {
-        color: Vec["vec3<f32>"],
-        position: Vec["vec3<f32>"],
+
+    static getDesc(): Desc {
+        return {
+            color: Vec['vec3<f32>'],
+            position: Vec['vec3<f32>'],
+        };
     }
 }
 
 class Lights {
     count: number;
-    pointLights: Array<PointLight>
-    
-    static desc = {
+    // Std140Array
+    pointLights: Array<PointLight>;
+
+    getDesc(): Desc {
+       return {
         count: Scalar.u32,
-        pointLights: Array(Struct('PointLight', PointLight.desc), 3)
+        pointLights: Array(Struct('PointLight', PointLight.getDesc()), this.count),
+       } 
     }
 }
 
+
+const std140 = {
+    alignOf(v: any) {
+        return 1;
+    },
+    sizeOf(v: any) {
+        return 1;
+    },
+};
+
+function layout(layout: any, s: StructType) {
+    return '' as any as Schema;
+}
+
+
+// supply the data and build the schema
+
+let camera = new Camera();
+camera.project = [1.0, 1.0, 1.0, 1.0, 1.0];
+
+let lights = new Lights();
+// todo: the value is determined at runtime???
+// if the count is changed, the desc for `Lights` and the mergedS structure needs to be recreated
+lights.count = 3;
+lights.pointLights = [new PointLight(), new PointLight(), new PointLight()];
+
 // auto merge
-let mergedS = Struct('Temp1', {...Camera.desc, ...Lights.desc});
+let mergedS = Struct('Temp1', { ...Camera.getDesc(), ...lights.getDesc() });
 
 // generated shader:
+// 
 //
+// before merge:
+//
+// struct PointLight {
+//     color: vec3<f32>,
+//     position: vec3<f32>,
+// }
+// var<uniform> project: mat4x4<f32>;
+// var<uniform> count: u32;
+// var<uniform> pointLights: array<PointLight, 3>
+
+// after merge: 
+
 // struct PointLight {
 //     color: vec3<f32>,
 //     position: vec3<f32>,
@@ -175,61 +236,58 @@ let mergedS = Struct('Temp1', {...Camera.desc, ...Lights.desc});
 //     pointLights: array<PointLight, 3>
 
 // }
-const std140 = {
-    alignOf(v: any) {return 1;},
-    sizeOf(v: any) {return 1;},
-}
+// var<uniform> temp1: Temp1;
+// #define project temp1.project
+// ...
 
-let a: Exclude<string, '__offset__'> = '__offset__';
+let std140S: Schema = layout(std140, mergedS);
 
-function rearrange(layout: any, s: StructType) {
-    return '' as any as Schema;
-}
-let std140S: Schema = rearrange(std140, mergedS);
-// after rearrange, the properties in the Structs are sorted
-type Schema = {
-    [key: Exclude<string, '__offset__' | '__size__' | '__type__'>]: Schema;
-} & {
-    __offset__: number;
-    __size__: number;
-    __type__: LeafTypes | ArrayType | StructType // the StructType is sorted
-}
+// write the data to GPU
 
 
-// write
-let camera = new Camera();
-camera.project = [1.0, 1.0, 1.0, 1.0, 1.0];
+const buffer = new ArrayBuffer(std140S.__size__);
+write(buffer, std140S.pointLights[1].color, lights.pointLights[1].color);
 
-let lights = new Lights();
-// todo: the value is determined at runtime???
-lights.count = 3; 
-lights.pointLights = [new PointLight(), new PointLight(), new PointLight()];
+// other impl
 
-// type guards, todo
+// type guards
 const typeCaster = {
-    isScalar(v: any): v is Scalar { return true;},
-    isVec(v: any): v is VecType { return true;},
-    isMatrix(v: any): v is MatrixType{ return true;},
-    isArray(v: any): v is ArrayType{ return true;},
-    isStruct(v: any): v is StructType{ return true;},
-}
+    isScalar(v: any): v is Scalar {
+        return true;
+    },
+    isVec(v: any): v is VecType {
+        return true;
+    },
+    isMatrix(v: any): v is MatrixType {
+        return true;
+    },
+    isArray(v: any): v is ArrayType {
+        return true;
+    },
+    isStruct(v: any): v is StructType {
+        return true;
+    },
+};
 
 // TypedArray View with cache
-function getF32View(buffer: ArrayBuffer): Float32Array {return '' as any;}
-function getI32View(buffer: ArrayBuffer): Int32Array {return '' as any;}
-function getU32View(buffer: ArrayBuffer): Uint32Array {return '' as any;}
-
-
-
+function getF32View(buffer: ArrayBuffer): Float32Array {
+    return '' as any;
+}
+function getI32View(buffer: ArrayBuffer): Int32Array {
+    return '' as any;
+}
+function getU32View(buffer: ArrayBuffer): Uint32Array {
+    return '' as any;
+}
 
 // todo: should the diff be inside the write or outside?
-function write(buffer: ArrayBuffer,location: {__offset__: number, __size__: number, __type__: LeafTypes | ArrayType | StructType}, data: any) {
-    const {__offset__: offset, __size__: size, __type__: type} = location;
+function write(buffer: ArrayBuffer, schema: Schema, data: any) {
+    const { __offset__: offset, __size__: size, __type__: type } = schema;
     // `data` should be compatible with `__type__`
-    
+
     if (typeCaster.isScalar(type)) {
         if (type === Scalar.f16) {
-           throw `todo: how to write f16 in JS?` 
+            throw `todo: how to write f16 in JS?`;
         } else if (type === Scalar.f32) {
             const view = getF32View(buffer);
             const index = offset / 4;
@@ -238,7 +296,7 @@ function write(buffer: ArrayBuffer,location: {__offset__: number, __size__: numb
             // others are omitted
         }
     } else if (typeCaster.isVec(type)) {
-        const {componentCount, componentType} = type;
+        const { componentCount, componentType } = type;
         if (componentType === Scalar.f32) {
             const view = getF32View(buffer);
             const index = offset / 4;
@@ -251,11 +309,11 @@ function write(buffer: ArrayBuffer,location: {__offset__: number, __size__: numb
     } else if (typeCaster.isMatrix(type)) {
         // omitted, should not be hard
     } else if (typeCaster.isArray(type)) {
-        const {count, elementType} = type;
-        
+        const { count, elementType } = type;
+
         // TS doesn't like to exclude string literals from string type
         // @see https://stackoverflow.com/questions/51442157/type-for-every-possible-string-value-except
-        // todo: fight the TS typing system, but not necessarily
+        // we can fight the TS typing system, but not necessarily
         const schema: Schema = {
             __offset__: offset,
             __size__: std140.sizeOf(elementType),
@@ -264,20 +322,17 @@ function write(buffer: ArrayBuffer,location: {__offset__: number, __size__: numb
         const align = std140.alignOf(elementType);
         for (let i = 0; i < count; i++) {
             write(buffer, schema, data[i]);
-            schema.__offset__ += align; 
+            schema.__offset__ += align;
         }
     } else if (typeCaster.isStruct(type)) {
-        // the struct is rearranged
-        const {properties} = type;
-        
-        let currentOffset = offset;
+        const { properties } = type;
+
         for (let i = 0, l = properties.length; i < l; i++) {
-            
+            const { name } = properties[i];
+            const s = schema[name];
+
+            write(buffer, s, data[name]);
         }
     }
 }
 
-const buffer = new ArrayBuffer(std140S.__size__);
-write(buffer, std140S.pointLights[1].color, lights.pointLights[1].color)
-
-// let a = s.a;

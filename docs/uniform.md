@@ -216,3 +216,13 @@ When only considering the write to the buffer, the flat merge is sufficient. The
 So we can only rearrange the properties inside a struct, which is a good thing, as it means we can do the rearrangement in compile time.
 
 But as the UBO itself is small enough, we don't need to do the rearrangement at all. 
+
+## attribute instance buffer
+
+不在uniform里面
+
+## 让CPU数据符合std140结构，加速写入
+
+## 去掉cpu里的大buffer
+
+去掉合并后的CPU里的大buffer，只提供基于schema的写入能力
